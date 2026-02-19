@@ -1,0 +1,351 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		05D9C4016E079AB4134EEB99 /* LinnetApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E9159929F26EB66FA7D7AA6 /* LinnetApp.swift */; };
+		15C1C4DBA3B8F04102229E97 /* LinnetAI in Frameworks */ = {isa = PBXBuildFile; productRef = 5E6D901B81466E142FD6C910 /* LinnetAI */; };
+		223EB684639D03602B1D03F4 /* LinnetLibrary in Frameworks */ = {isa = PBXBuildFile; productRef = 15E14F532D38EDBCDA206E74 /* LinnetLibrary */; };
+		83C20C4B929A3EA0ACF80530 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 71A92EA0026F8A9B0A55487F /* ContentView.swift */; };
+		870B1858D72001D9229AA1DB /* LinnetAudio in Frameworks */ = {isa = PBXBuildFile; productRef = ADC34EBDB8FF5FA9927D9707 /* LinnetAudio */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		4C3B240A06E5F91C0EB5A341 /* LinnetAudio */ = {isa = PBXFileReference; lastKnownFileType = folder; name = LinnetAudio; path = Packages/LinnetAudio; sourceTree = SOURCE_ROOT; };
+		602C475B1D70E1CBE074F5E2 /* Linnet.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Linnet.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		695575C8558487FEAF0DA78C /* LinnetLibrary */ = {isa = PBXFileReference; lastKnownFileType = folder; name = LinnetLibrary; path = Packages/LinnetLibrary; sourceTree = SOURCE_ROOT; };
+		71A92EA0026F8A9B0A55487F /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		7E9159929F26EB66FA7D7AA6 /* LinnetApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LinnetApp.swift; sourceTree = "<group>"; };
+		FBC3D93793F573CCE0B71639 /* LinnetAI */ = {isa = PBXFileReference; lastKnownFileType = folder; name = LinnetAI; path = Packages/LinnetAI; sourceTree = SOURCE_ROOT; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		B2B69DF024C12B4BD32899B8 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				870B1858D72001D9229AA1DB /* LinnetAudio in Frameworks */,
+				223EB684639D03602B1D03F4 /* LinnetLibrary in Frameworks */,
+				15C1C4DBA3B8F04102229E97 /* LinnetAI in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		2E633D31D90CB58422302975 = {
+			isa = PBXGroup;
+			children = (
+				72F7B11244762336EDC94C2C /* Linnet */,
+				7D8A3B5734B4BA87B47011D1 /* Packages */,
+				F3061EB395E3EB0D3FB0BE05 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		72F7B11244762336EDC94C2C /* Linnet */ = {
+			isa = PBXGroup;
+			children = (
+				71A92EA0026F8A9B0A55487F /* ContentView.swift */,
+				7E9159929F26EB66FA7D7AA6 /* LinnetApp.swift */,
+			);
+			path = Linnet;
+			sourceTree = "<group>";
+		};
+		7D8A3B5734B4BA87B47011D1 /* Packages */ = {
+			isa = PBXGroup;
+			children = (
+				FBC3D93793F573CCE0B71639 /* LinnetAI */,
+				4C3B240A06E5F91C0EB5A341 /* LinnetAudio */,
+				695575C8558487FEAF0DA78C /* LinnetLibrary */,
+			);
+			path = Packages;
+			sourceTree = "<group>";
+		};
+		F3061EB395E3EB0D3FB0BE05 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				602C475B1D70E1CBE074F5E2 /* Linnet.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		85FA5DDA5630F1FC2B700663 /* Linnet */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 4B626F0B7C8273B9065C4386 /* Build configuration list for PBXNativeTarget "Linnet" */;
+			buildPhases = (
+				C7F9548FC0E73178A894556D /* Sources */,
+				B2B69DF024C12B4BD32899B8 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = Linnet;
+			packageProductDependencies = (
+				ADC34EBDB8FF5FA9927D9707 /* LinnetAudio */,
+				15E14F532D38EDBCDA206E74 /* LinnetLibrary */,
+				5E6D901B81466E142FD6C910 /* LinnetAI */,
+			);
+			productName = Linnet;
+			productReference = 602C475B1D70E1CBE074F5E2 /* Linnet.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		FD5995D645FC79467FDA98A9 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1500;
+			};
+			buildConfigurationList = DA1ECC16235D38CE173C6F26 /* Build configuration list for PBXProject "Linnet" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = 2E633D31D90CB58422302975;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				394A7B4FA4130778BE6B9B44 /* XCLocalSwiftPackageReference "Packages/LinnetAI" */,
+				A6E4EFE847E24F4042FBAACD /* XCLocalSwiftPackageReference "Packages/LinnetAudio" */,
+				799F9AA8491E3B408BA12404 /* XCLocalSwiftPackageReference "Packages/LinnetLibrary" */,
+			);
+			preferredProjectObjectVersion = 77;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				85FA5DDA5630F1FC2B700663 /* Linnet */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXSourcesBuildPhase section */
+		C7F9548FC0E73178A894556D /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				83C20C4B929A3EA0ACF80530 /* ContentView.swift in Sources */,
+				05D9C4016E079AB4134EEB99 /* LinnetApp.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		16E7719D9EE6F3E16366C986 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				COMBINE_HIDPI_IMAGES = YES;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.music";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.linnet.app;
+				SDKROOT = macosx;
+			};
+			name = Release;
+		};
+		3B945EC89070B8AC838E2672 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				COMBINE_HIDPI_IMAGES = YES;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.music";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.linnet.app;
+				SDKROOT = macosx;
+			};
+			name = Debug;
+		};
+		5DA730F6E387DA612E6417B8 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.9;
+			};
+			name = Debug;
+		};
+		F0343AF704DB0DCCDBBEEDCD /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.9;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		4B626F0B7C8273B9065C4386 /* Build configuration list for PBXNativeTarget "Linnet" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				3B945EC89070B8AC838E2672 /* Debug */,
+				16E7719D9EE6F3E16366C986 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		DA1ECC16235D38CE173C6F26 /* Build configuration list for PBXProject "Linnet" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				5DA730F6E387DA612E6417B8 /* Debug */,
+				F0343AF704DB0DCCDBBEEDCD /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		394A7B4FA4130778BE6B9B44 /* XCLocalSwiftPackageReference "Packages/LinnetAI" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Packages/LinnetAI;
+		};
+		799F9AA8491E3B408BA12404 /* XCLocalSwiftPackageReference "Packages/LinnetLibrary" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Packages/LinnetLibrary;
+		};
+		A6E4EFE847E24F4042FBAACD /* XCLocalSwiftPackageReference "Packages/LinnetAudio" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Packages/LinnetAudio;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		15E14F532D38EDBCDA206E74 /* LinnetLibrary */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = LinnetLibrary;
+		};
+		5E6D901B81466E142FD6C910 /* LinnetAI */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = LinnetAI;
+		};
+		ADC34EBDB8FF5FA9927D9707 /* LinnetAudio */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = LinnetAudio;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = FD5995D645FC79467FDA98A9 /* Project object */;
+}
