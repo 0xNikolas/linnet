@@ -58,6 +58,7 @@ jobs:
             -scheme Linnet \
             -configuration Debug \
             -destination 'generic/platform=macOS' \
+            ARCHS=arm64 \
             CODE_SIGN_IDENTITY="-" \
             CODE_SIGNING_REQUIRED=NO
 
@@ -113,6 +114,7 @@ jobs:
             -configuration Release \
             -destination 'generic/platform=macOS' \
             -archivePath $RUNNER_TEMP/Linnet.xcarchive \
+            ARCHS=arm64 \
             DEVELOPMENT_TEAM="$DEVELOPMENT_TEAM"
 
       - name: Export archive
