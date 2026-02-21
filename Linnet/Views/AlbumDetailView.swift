@@ -1,16 +1,15 @@
 import SwiftUI
+import LinnetLibrary
 
 struct AlbumDetailView: View {
-    let albumName: String
-    let artistName: String
+    let album: Album
+    @Environment(PlayerViewModel.self) private var player
 
-    // Placeholder tracks
-    private let tracks = [
-        (number: 1, title: "First Track", duration: "3:42"),
-        (number: 2, title: "Second Track", duration: "4:15"),
-        (number: 3, title: "Third Track", duration: "2:58"),
-        (number: 4, title: "Fourth Track", duration: "5:01"),
-    ]
+    private var sortedTracks: [Track] {
+        album.tracks.sorted {
+            ($0.discNumber, $0.trackNumber) < ($1.discNumber, $1.trackNumber)
+        }
+    }
 
     var body: some View {
         ScrollView {
@@ -21,28 +20,53 @@ struct AlbumDetailView: View {
                         .fill(.quaternary)
                         .frame(width: 200, height: 200)
                         .overlay {
-                            Image(systemName: "music.note")
-                                .font(.system(size: 40))
-                                .foregroundStyle(.secondary)
+                            if let artData = album.artworkData, let img = NSImage(data: artData) {
+                                Image(nsImage: img)
+                                    .resizable()
+                                    .scaledToFill()
+                            } else {
+                                Image(systemName: "music.note")
+                                    .font(.system(size: 40))
+                                    .foregroundStyle(.secondary)
+                            }
                         }
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
                         .shadow(color: .black.opacity(0.2), radius: 8, y: 4)
 
                     VStack(alignment: .leading, spacing: 8) {
-                        Text(albumName)
+                        Text(album.name)
                             .font(.system(size: 28, weight: .bold))
-                        Text(artistName)
+                        Text(album.artistName ?? "Unknown Artist")
                             .font(.system(size: 18))
                             .foregroundStyle(.secondary)
-                        Text("\(tracks.count) songs")
-                            .font(.system(size: 13))
-                            .foregroundStyle(.tertiary)
+
+                        HStack(spacing: 8) {
+                            if let year = album.year {
+                                Text(String(year))
+                                    .font(.system(size: 13))
+                                    .foregroundStyle(.tertiary)
+                            }
+                            Text("\(sortedTracks.count) songs")
+                                .font(.system(size: 13))
+                                .foregroundStyle(.tertiary)
+                        }
 
                         HStack(spacing: 12) {
-                            Button("Play") {}
-                                .buttonStyle(.borderedProminent)
-                                .tint(.accentColor)
-                            Button("Shuffle") {}
-                                .buttonStyle(.bordered)
+                            Button("Play") {
+                                if let first = sortedTracks.first {
+                                    player.playTrack(first, queue: sortedTracks, startingAt: 0)
+                                }
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .tint(.accentColor)
+
+                            Button("Shuffle") {
+                                let shuffled = sortedTracks.shuffled()
+                                if let first = shuffled.first {
+                                    player.playTrack(first, queue: shuffled, startingAt: 0)
+                                }
+                            }
+                            .buttonStyle(.bordered)
                         }
                         .padding(.top, 4)
                     }
@@ -52,9 +76,9 @@ struct AlbumDetailView: View {
                 Divider()
 
                 // Track list
-                ForEach(tracks, id: \.number) { track in
+                ForEach(Array(sortedTracks.enumerated()), id: \.element.id) { index, track in
                     HStack {
-                        Text("\(track.number)")
+                        Text("\(track.trackNumber)")
                             .font(.system(size: 13))
                             .foregroundStyle(.secondary)
                             .frame(width: 30, alignment: .trailing)
@@ -64,18 +88,29 @@ struct AlbumDetailView: View {
 
                         Spacer()
 
-                        Text(track.duration)
+                        Text(formatDuration(track.duration))
                             .font(.system(size: 13, design: .monospaced))
                             .foregroundStyle(.secondary)
                     }
                     .padding(.horizontal, 20)
                     .padding(.vertical, 8)
                     .contentShape(Rectangle())
+                    .onTapGesture(count: 2) {
+                        player.playTrack(track, queue: sortedTracks, startingAt: index)
+                    }
 
-                    Divider()
-                        .padding(.leading, 60)
+                    if index < sortedTracks.count - 1 {
+                        Divider()
+                            .padding(.leading, 60)
+                    }
                 }
             }
         }
+    }
+
+    private func formatDuration(_ seconds: Double) -> String {
+        let mins = Int(seconds) / 60
+        let secs = Int(seconds) % 60
+        return String(format: "%d:%02d", mins, secs)
     }
 }
