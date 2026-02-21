@@ -18,6 +18,19 @@ public final class PlayerViewModel {
         didSet { Task { await audioPlayer.setVolume(volume) } }
     }
     var isPlaying: Bool { state == .playing }
+
+    var currentQueueTrack: Track? {
+        guard queue.currentIndex < queuedTracks.count else { return nil }
+        return queuedTracks[queue.currentIndex]
+    }
+
+    var upcomingTracks: [Track] {
+        guard queue.currentIndex + 1 < queuedTracks.count else { return [] }
+        return Array(queuedTracks[(queue.currentIndex + 1)...])
+    }
+
+    var queueCount: Int { queuedTracks.count }
+
     var progress: Double {
         get { duration > 0 ? currentTime / duration : 0 }
         set {
@@ -130,6 +143,12 @@ public final class PlayerViewModel {
             updateMetadata(for: queuedTracks[self.queue.currentIndex])
             loadAndPlay(filePath: current)
         }
+    }
+
+    func clearQueue() {
+        queue.clear()
+        let currentTrack = currentQueueTrack
+        queuedTracks = currentTrack.map { [$0] } ?? []
     }
 
     func loadAndPlay(filePath: String) {

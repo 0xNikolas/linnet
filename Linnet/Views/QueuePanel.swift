@@ -1,17 +1,9 @@
 import SwiftUI
+import LinnetLibrary
 
 struct QueuePanel: View {
     @Binding var isShowing: Bool
-
-    private let upNext = [
-        (title: "Next Song", artist: "Artist B"),
-        (title: "Another Track", artist: "Artist C"),
-        (title: "More Music", artist: "Artist A"),
-    ]
-
-    private let history = [
-        (title: "Previous Song", artist: "Artist A"),
-    ]
+    @Environment(PlayerViewModel.self) private var player
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -19,9 +11,11 @@ struct QueuePanel: View {
                 Text("Queue")
                     .font(.headline)
                 Spacer()
-                Button("Clear") {}
-                    .buttonStyle(.plain)
-                    .foregroundStyle(.tint)
+                Button("Clear") {
+                    player.clearQueue()
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.tint)
                 Button(action: { isShowing = false }) {
                     Image(systemName: "xmark.circle.fill")
                         .foregroundStyle(.secondary)
@@ -35,79 +29,26 @@ struct QueuePanel: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     // Now Playing
-                    Section {
-                        HStack(spacing: 12) {
-                            RoundedRectangle(cornerRadius: 4)
-                                .fill(.quaternary)
-                                .frame(width: 36, height: 36)
-                            VStack(alignment: .leading) {
-                                Text("Current Song")
-                                    .font(.system(size: 13, weight: .semibold))
-                                Text("Artist A")
-                                    .font(.system(size: 11))
-                                    .foregroundStyle(.secondary)
-                            }
+                    if let current = player.currentQueueTrack {
+                        Section {
+                            queueRow(title: current.title, artist: current.artist?.name ?? "Unknown", artwork: current.artworkData, isCurrent: true)
+                                .padding(.horizontal)
+                        } header: {
+                            sectionHeader("Now Playing")
                         }
-                        .padding(.horizontal)
-                    } header: {
-                        Text("Now Playing")
-                            .font(.system(size: 11, weight: .semibold))
-                            .foregroundStyle(.secondary)
-                            .textCase(.uppercase)
-                            .padding(.horizontal)
                     }
 
                     // Up Next
-                    Section {
-                        ForEach(upNext, id: \.title) { track in
-                            HStack(spacing: 12) {
-                                RoundedRectangle(cornerRadius: 4)
-                                    .fill(.quaternary)
-                                    .frame(width: 36, height: 36)
-                                VStack(alignment: .leading) {
-                                    Text(track.title)
-                                        .font(.system(size: 13))
-                                    Text(track.artist)
-                                        .font(.system(size: 11))
-                                        .foregroundStyle(.secondary)
-                                }
-                                Spacer()
+                    let upcoming = player.upcomingTracks
+                    if !upcoming.isEmpty {
+                        Section {
+                            ForEach(upcoming) { track in
+                                queueRow(title: track.title, artist: track.artist?.name ?? "Unknown", artwork: track.artworkData, isCurrent: false)
+                                    .padding(.horizontal)
                             }
-                            .padding(.horizontal)
+                        } header: {
+                            sectionHeader("Up Next \u{2014} \(upcoming.count) songs")
                         }
-                    } header: {
-                        Text("Up Next")
-                            .font(.system(size: 11, weight: .semibold))
-                            .foregroundStyle(.secondary)
-                            .textCase(.uppercase)
-                            .padding(.horizontal)
-                    }
-
-                    // History
-                    Section {
-                        ForEach(history, id: \.title) { track in
-                            HStack(spacing: 12) {
-                                RoundedRectangle(cornerRadius: 4)
-                                    .fill(.quaternary)
-                                    .frame(width: 36, height: 36)
-                                VStack(alignment: .leading) {
-                                    Text(track.title)
-                                        .font(.system(size: 13))
-                                        .foregroundStyle(.secondary)
-                                    Text(track.artist)
-                                        .font(.system(size: 11))
-                                        .foregroundStyle(.tertiary)
-                                }
-                                Spacer()
-                            }
-                            .padding(.horizontal)
-                        }
-                    } header: {
-                        Text("History")
-                            .font(.system(size: 11, weight: .semibold))
-                            .foregroundStyle(.secondary)
-                            .textCase(.uppercase)
-                            .padding(.horizontal)
                     }
                 }
                 .padding(.vertical)
@@ -115,5 +56,38 @@ struct QueuePanel: View {
         }
         .frame(width: 300)
         .background(.ultraThinMaterial)
+    }
+
+    private func queueRow(title: String, artist: String, artwork: Data?, isCurrent: Bool) -> some View {
+        HStack(spacing: 12) {
+            RoundedRectangle(cornerRadius: 4)
+                .fill(.quaternary)
+                .frame(width: 36, height: 36)
+                .overlay {
+                    if let data = artwork, let img = NSImage(data: data) {
+                        Image(nsImage: img)
+                            .resizable()
+                            .scaledToFill()
+                    }
+                }
+                .clipShape(RoundedRectangle(cornerRadius: 4))
+
+            VStack(alignment: .leading) {
+                Text(title)
+                    .font(.system(size: 13, weight: isCurrent ? .semibold : .regular))
+                Text(artist)
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+        }
+    }
+
+    private func sectionHeader(_ text: String) -> some View {
+        Text(text)
+            .font(.system(size: 11, weight: .semibold))
+            .foregroundStyle(.secondary)
+            .textCase(.uppercase)
+            .padding(.horizontal)
     }
 }
