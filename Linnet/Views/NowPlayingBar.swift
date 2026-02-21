@@ -2,6 +2,7 @@ import SwiftUI
 
 struct NowPlayingBar: View {
     @Environment(PlayerViewModel.self) private var player
+    @State private var showQueue = false
 
     var body: some View {
         @Bindable var player = player
@@ -91,11 +92,15 @@ struct NowPlayingBar: View {
                 }
 
                 // Queue button
-                Button(action: {}) {
+                Button(action: { showQueue.toggle() }) {
                     Image(systemName: "list.bullet")
                         .font(.system(size: 14))
+                        .foregroundStyle(showQueue ? .tint : .primary)
                 }
                 .buttonStyle(.plain)
+                .popover(isPresented: $showQueue, arrowEdge: .top) {
+                    QueuePanel(isShowing: $showQueue)
+                }
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 8)
