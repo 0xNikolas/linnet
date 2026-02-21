@@ -1,6 +1,7 @@
 import SwiftUI
 import Observation
 import LinnetAudio
+import LinnetLibrary
 
 @MainActor
 @Observable
@@ -28,6 +29,8 @@ public final class PlayerViewModel {
     private let audioPlayer = AudioPlayer()
     private let nowPlayingManager = NowPlayingManager.shared
     var queue = PlaybackQueue()
+    private var queuedTracks: [Track] = []
+    private var currentTrackIndex: Int = 0
     private var timeUpdateTimer: Timer?
 
     init() {
@@ -69,8 +72,12 @@ public final class PlayerViewModel {
     }
 
     func next() {
-        if let nextTrack = queue.advance() {
-            loadAndPlay(filePath: nextTrack)
+        if let nextPath = queue.advance() {
+            currentTrackIndex += 1
+            if currentTrackIndex < queuedTracks.count {
+                updateMetadata(for: queuedTracks[currentTrackIndex])
+            }
+            loadAndPlay(filePath: nextPath)
         } else {
             stop()
         }
@@ -81,8 +88,12 @@ public final class PlayerViewModel {
             seek(to: 0)
             return
         }
-        if let prevTrack = queue.goBack() {
-            loadAndPlay(filePath: prevTrack)
+        if let prevPath = queue.goBack() {
+            currentTrackIndex -= 1
+            if currentTrackIndex >= 0, currentTrackIndex < queuedTracks.count {
+                updateMetadata(for: queuedTracks[currentTrackIndex])
+            }
+            loadAndPlay(filePath: prevPath)
         }
     }
 
@@ -109,6 +120,21 @@ public final class PlayerViewModel {
         }
     }
 
+    func playTrack(_ track: Track, queue: [Track], startingAt index: Int = 0) {
+        queuedTracks = queue
+        currentTrackIndex = index
+        let filePaths = queue.map(\.filePath)
+        self.queue = PlaybackQueue()
+        self.queue.add(tracks: filePaths)
+        for _ in 0..<index {
+            _ = self.queue.advance()
+        }
+        if let current = self.queue.current {
+            updateMetadata(for: queuedTracks[index])
+            loadAndPlay(filePath: current)
+        }
+    }
+
     func loadAndPlay(filePath: String) {
         Task {
             do {
@@ -118,7 +144,9 @@ public final class PlayerViewModel {
                 state = .playing
                 duration = await audioPlayer.duration
                 currentTime = 0
-                currentTrackTitle = url.deletingPathExtension().lastPathComponent
+                if currentTrackTitle == "No Track Playing" {
+                    currentTrackTitle = url.deletingPathExtension().lastPathComponent
+                }
                 errorMessage = nil
                 updateNowPlayingInfo()
                 startTimeUpdates()
@@ -127,6 +155,15 @@ public final class PlayerViewModel {
                 errorMessage = "Could not play file: \(error.localizedDescription)"
             }
         }
+    }
+
+    private func updateMetadata(for track: Track) {
+        currentTrackTitle = track.title
+        currentTrackArtist = track.artist?.name ?? "Unknown Artist"
+        currentTrackAlbum = track.album?.name ?? ""
+        currentArtworkData = track.artworkData
+        track.lastPlayed = Date()
+        track.playCount += 1
     }
 
     // MARK: - Time Updates
