@@ -5,7 +5,7 @@ configs:
 options:
   bundleIdPrefix: com.linnet
   deploymentTarget:
-    macOS: "14.0"
+    macOS: "15.0"
   xcodeVersion: "15.0"
 settings:
   base:
@@ -20,7 +20,8 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.linnet.app
         PRODUCT_NAME: Linnet
-        MACOSX_DEPLOYMENT_TARGET: "14.0"
+        GENERATE_INFOPLIST_FILE: "YES"
+        MACOSX_DEPLOYMENT_TARGET: "15.0"
         INFOPLIST_KEY_LSApplicationCategoryType: "public.app-category.music"
         CODE_SIGN_ENTITLEMENTS: Linnet/Linnet.entitlements
         CODE_SIGN_IDENTITY: "Apple Development"

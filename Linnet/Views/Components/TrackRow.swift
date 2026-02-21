@@ -20,7 +20,7 @@ struct TrackRow: View {
             if isPlaying {
                 Image(systemName: "speaker.wave.2.fill")
                     .font(.system(size: 11))
-                    .foregroundStyle(.accent)
+                    .foregroundStyle(.tint)
                     .frame(width: 30, alignment: .trailing)
             } else {
                 Text("\(number)")

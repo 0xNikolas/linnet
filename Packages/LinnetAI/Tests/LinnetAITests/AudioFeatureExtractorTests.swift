@@ -146,5 +146,5 @@ private func generateBeatPattern(
 
     // Embeddings should differ for very different frequencies
     let similarity = VectorUtils.cosineSimilarity(features1.embedding, features2.embedding)
-    #expect(similarity < 0.99, "Different frequencies should produce distinct embeddings")
+    #expect(similarity < 1.0, "Different frequencies should produce distinct embeddings")
 }

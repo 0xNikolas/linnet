@@ -8,7 +8,7 @@ struct AIChatView: View {
             // Header
             HStack {
                 Image(systemName: "sparkles")
-                    .foregroundStyle(.accent)
+                    .foregroundStyle(.tint)
                 Text("AI Assistant")
                     .font(.title2.bold())
                 Spacer()
@@ -65,7 +65,7 @@ struct AIChatView: View {
                 Button(action: { viewModel.sendMessage() }) {
                     Image(systemName: "arrow.up.circle.fill")
                         .font(.system(size: 24))
-                        .foregroundStyle(.accent)
+                        .foregroundStyle(.tint)
                 }
                 .buttonStyle(.plain)
                 .disabled(viewModel.inputText.trimmingCharacters(in: .whitespaces).isEmpty || viewModel.isProcessing)
@@ -83,9 +83,9 @@ struct ChatBubble: View {
             if message.role == .assistant {
                 Image(systemName: "sparkles")
                     .font(.system(size: 16))
-                    .foregroundStyle(.accent)
+                    .foregroundStyle(.tint)
                     .frame(width: 28, height: 28)
-                    .background(.accent.opacity(0.1))
+                    .background(Color.accentColor.opacity(0.1))
                     .clipShape(Circle())
             }
 
@@ -108,7 +108,7 @@ struct ChatBubble: View {
                 }
             }
             .padding(12)
-            .background(message.role == .assistant ? Color.secondary.opacity(0.08) : Color.accent.opacity(0.1))
+            .background(message.role == .assistant ? Color.secondary.opacity(0.08) : Color.accentColor.opacity(0.1))
             .clipShape(RoundedRectangle(cornerRadius: 12))
 
             if message.role == .user {

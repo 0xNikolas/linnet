@@ -21,7 +21,7 @@ struct QueuePanel: View {
                 Spacer()
                 Button("Clear") {}
                     .buttonStyle(.plain)
-                    .foregroundStyle(.accent)
+                    .foregroundStyle(.tint)
                 Button(action: { isShowing = false }) {
                     Image(systemName: "xmark.circle.fill")
                         .foregroundStyle(.secondary)

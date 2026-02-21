@@ -1,4 +1,4 @@
-import AVFoundation
+@preconcurrency import AVFoundation
 
 public struct TrackMetadata: Sendable {
     public let title: String?
@@ -35,10 +35,10 @@ public actor MetadataExtractor {
         var title: String?
         var artist: String?
         var album: String?
-        var trackNumber: Int?
-        var discNumber: Int?
-        var year: Int?
-        var genre: String?
+        let trackNumber: Int? = nil
+        let discNumber: Int? = nil
+        let year: Int? = nil
+        let genre: String? = nil
         var artwork: Data?
 
         for item in metadata {

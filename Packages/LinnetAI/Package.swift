@@ -3,7 +3,7 @@ import PackageDescription
 
 let package = Package(
     name: "LinnetAI",
-    platforms: [.macOS(.v14)],
+    platforms: [.macOS(.v15)],
     products: [
         .library(name: "LinnetAI", targets: ["LinnetAI"]),
     ],

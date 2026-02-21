@@ -8,17 +8,17 @@ struct DropOverlay: ViewModifier {
         content.overlay {
             if isTargeted {
                 RoundedRectangle(cornerRadius: 12)
-                    .stroke(.accent, lineWidth: 3)
-                    .background(.accent.opacity(0.05))
+                    .stroke(Color.accentColor, lineWidth: 3)
+                    .background(Color.accentColor.opacity(0.05))
                     .clipShape(RoundedRectangle(cornerRadius: 12))
                     .overlay {
                         VStack(spacing: 8) {
                             Image(systemName: "plus.circle.fill")
                                 .font(.system(size: 40))
-                                .foregroundStyle(.accent)
+                                .foregroundStyle(.tint)
                             Text("Drop to add to library")
                                 .font(.headline)
-                                .foregroundStyle(.accent)
+                                .foregroundStyle(.tint)
                         }
                     }
                     .padding(4)

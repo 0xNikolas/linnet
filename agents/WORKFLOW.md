@@ -27,7 +27,7 @@
 - **Run the full test suite** before committing
 - After pushing, **wait for CI checks** and fix any failures
 - Pre-commit hooks may auto-push, so `git push` might say "up to date"
-  - Do NOT add `Co-Authored-By: Claude Opus x.x <noreply@anthropic.com>` to commit messages
+- **Never add** `Co-Authored-By` lines to commit messages
 
 ## Completion
 

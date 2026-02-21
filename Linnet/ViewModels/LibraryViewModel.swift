@@ -1,5 +1,5 @@
 import SwiftUI
-import SwiftData
+@preconcurrency import SwiftData
 import Observation
 import LinnetLibrary
 
