@@ -5,6 +5,7 @@ import LinnetLibrary
 struct ListenNowView: View {
     @Query(sort: \Album.name) private var albums: [Album]
     @Query(sort: \Track.dateAdded, order: .reverse) private var recentTracks: [Track]
+    @Environment(PlayerViewModel.self) private var player
 
     var body: some View {
         ScrollView {
@@ -19,8 +20,9 @@ struct ListenNowView: View {
                         .frame(maxWidth: .infinity, minHeight: 300)
                 } else {
                     if !recentTracks.isEmpty {
+                        let displayedTracks = Array(recentTracks.prefix(10))
                         HorizontalScrollRow(title: "Recently Added") {
-                            ForEach(Array(recentTracks.prefix(10).enumerated()), id: \.offset) { _, track in
+                            ForEach(Array(displayedTracks.enumerated()), id: \.element.id) { index, track in
                                 VStack(alignment: .leading, spacing: 6) {
                                     RoundedRectangle(cornerRadius: 8)
                                         .fill(.quaternary)
@@ -47,6 +49,10 @@ struct ListenNowView: View {
                                         .lineLimit(1)
                                 }
                                 .frame(width: 160)
+                                .contentShape(Rectangle())
+                                .onTapGesture(count: 2) {
+                                    player.playTrack(track, queue: displayedTracks, startingAt: index)
+                                }
                             }
                         }
                     }
@@ -54,12 +60,15 @@ struct ListenNowView: View {
                     if !albums.isEmpty {
                         HorizontalScrollRow(title: "Albums") {
                             ForEach(albums.prefix(10)) { album in
-                                AlbumCard(
-                                    name: album.name,
-                                    artist: album.artistName ?? "Unknown",
-                                    artwork: album.artworkData.flatMap { NSImage(data: $0) }
-                                )
-                                .frame(width: 160)
+                                NavigationLink(value: album) {
+                                    AlbumCard(
+                                        name: album.name,
+                                        artist: album.artistName ?? "Unknown",
+                                        artwork: album.artworkData.flatMap { NSImage(data: $0) }
+                                    )
+                                    .frame(width: 160)
+                                }
+                                .buttonStyle(.plain)
                             }
                         }
                     }
@@ -90,6 +99,9 @@ struct ListenNowView: View {
                 }
             }
             .padding(.bottom, 20)
+        }
+        .navigationDestination(for: Album.self) { album in
+            AlbumDetailView(album: album)
         }
     }
 }

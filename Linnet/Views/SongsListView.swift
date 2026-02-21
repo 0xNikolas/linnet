@@ -4,42 +4,46 @@ import LinnetLibrary
 
 struct SongsListView: View {
     @Query(sort: \Track.title) private var tracks: [Track]
+    @Environment(PlayerViewModel.self) private var player
 
     var body: some View {
         if tracks.isEmpty {
             ContentUnavailableView("No Songs", systemImage: "music.note", description: Text("Add a music folder in Settings to get started."))
         } else {
-            Table(tracks) {
-                TableColumn("#") { track in
-                    Text("\(track.trackNumber)")
-                        .foregroundStyle(.secondary)
-                }
-                .width(min: 30, ideal: 40, max: 50)
+            List {
+                ForEach(Array(tracks.enumerated()), id: \.element.id) { index, track in
+                    HStack {
+                        Text("\(track.trackNumber)")
+                            .font(.system(size: 13))
+                            .foregroundStyle(.secondary)
+                            .frame(width: 30, alignment: .trailing)
 
-                TableColumn("Title") { track in
-                    Text(track.title)
-                }
-                .width(min: 100, ideal: 200)
+                        Text(track.title)
+                            .font(.system(size: 13))
+                            .frame(maxWidth: .infinity, alignment: .leading)
 
-                TableColumn("Artist") { track in
-                    Text(track.artist?.name ?? "Unknown")
-                        .foregroundStyle(.secondary)
-                }
-                .width(min: 80, ideal: 150)
+                        Text(track.artist?.name ?? "Unknown")
+                            .font(.system(size: 13))
+                            .foregroundStyle(.secondary)
+                            .frame(width: 150, alignment: .leading)
 
-                TableColumn("Album") { track in
-                    Text(track.album?.name ?? "Unknown")
-                        .foregroundStyle(.secondary)
-                }
-                .width(min: 80, ideal: 150)
+                        Text(track.album?.name ?? "Unknown")
+                            .font(.system(size: 13))
+                            .foregroundStyle(.secondary)
+                            .frame(width: 150, alignment: .leading)
 
-                TableColumn("Duration") { track in
-                    Text(formatDuration(track.duration))
-                        .font(.system(.body, design: .monospaced))
-                        .foregroundStyle(.secondary)
+                        Text(formatDuration(track.duration))
+                            .font(.system(.body, design: .monospaced))
+                            .foregroundStyle(.secondary)
+                            .frame(width: 50, alignment: .trailing)
+                    }
+                    .contentShape(Rectangle())
+                    .onTapGesture(count: 2) {
+                        player.playTrack(track, queue: tracks, startingAt: index)
+                    }
                 }
-                .width(min: 50, ideal: 60, max: 80)
             }
+            .listStyle(.inset)
         }
     }
 

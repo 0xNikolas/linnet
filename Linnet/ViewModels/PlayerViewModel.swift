@@ -1,6 +1,7 @@
 import SwiftUI
 import Observation
 import LinnetAudio
+import LinnetLibrary
 
 @MainActor
 @Observable
@@ -17,6 +18,19 @@ public final class PlayerViewModel {
         didSet { Task { await audioPlayer.setVolume(volume) } }
     }
     var isPlaying: Bool { state == .playing }
+
+    var currentQueueTrack: Track? {
+        guard queue.currentIndex < queuedTracks.count else { return nil }
+        return queuedTracks[queue.currentIndex]
+    }
+
+    var upcomingTracks: [Track] {
+        guard queue.currentIndex + 1 < queuedTracks.count else { return [] }
+        return Array(queuedTracks[(queue.currentIndex + 1)...])
+    }
+
+    var queueCount: Int { queuedTracks.count }
+
     var progress: Double {
         get { duration > 0 ? currentTime / duration : 0 }
         set {
@@ -28,6 +42,7 @@ public final class PlayerViewModel {
     private let audioPlayer = AudioPlayer()
     private let nowPlayingManager = NowPlayingManager.shared
     var queue = PlaybackQueue()
+    private var queuedTracks: [Track] = []
     private var timeUpdateTimer: Timer?
 
     init() {
@@ -69,8 +84,11 @@ public final class PlayerViewModel {
     }
 
     func next() {
-        if let nextTrack = queue.advance() {
-            loadAndPlay(filePath: nextTrack)
+        if let nextPath = queue.advance() {
+            if queue.currentIndex < queuedTracks.count {
+                updateMetadata(for: queuedTracks[queue.currentIndex])
+            }
+            loadAndPlay(filePath: nextPath)
         } else {
             stop()
         }
@@ -81,8 +99,11 @@ public final class PlayerViewModel {
             seek(to: 0)
             return
         }
-        if let prevTrack = queue.goBack() {
-            loadAndPlay(filePath: prevTrack)
+        if let prevPath = queue.goBack() {
+            if queue.currentIndex < queuedTracks.count {
+                updateMetadata(for: queuedTracks[queue.currentIndex])
+            }
+            loadAndPlay(filePath: prevPath)
         }
     }
 
@@ -99,6 +120,7 @@ public final class PlayerViewModel {
     }
 
     func playTracks(_ filePaths: [String], startingAt index: Int = 0) {
+        queuedTracks = []
         queue = PlaybackQueue()
         queue.add(tracks: filePaths)
         for _ in 0..<index {
@@ -107,6 +129,26 @@ public final class PlayerViewModel {
         if let current = queue.current {
             loadAndPlay(filePath: current)
         }
+    }
+
+    func playTrack(_ track: Track, queue: [Track], startingAt index: Int = 0) {
+        queuedTracks = queue
+        let filePaths = queue.map(\.filePath)
+        self.queue = PlaybackQueue()
+        self.queue.add(tracks: filePaths)
+        for _ in 0..<index {
+            _ = self.queue.advance()
+        }
+        if let current = self.queue.current {
+            updateMetadata(for: queuedTracks[self.queue.currentIndex])
+            loadAndPlay(filePath: current)
+        }
+    }
+
+    func clearQueue() {
+        queue.clear()
+        let currentTrack = currentQueueTrack
+        queuedTracks = currentTrack.map { [$0] } ?? []
     }
 
     func loadAndPlay(filePath: String) {
@@ -118,7 +160,9 @@ public final class PlayerViewModel {
                 state = .playing
                 duration = await audioPlayer.duration
                 currentTime = 0
-                currentTrackTitle = url.deletingPathExtension().lastPathComponent
+                if currentTrackTitle == "No Track Playing" {
+                    currentTrackTitle = url.deletingPathExtension().lastPathComponent
+                }
                 errorMessage = nil
                 updateNowPlayingInfo()
                 startTimeUpdates()
@@ -127,6 +171,15 @@ public final class PlayerViewModel {
                 errorMessage = "Could not play file: \(error.localizedDescription)"
             }
         }
+    }
+
+    private func updateMetadata(for track: Track) {
+        currentTrackTitle = track.title
+        currentTrackArtist = track.artist?.name ?? "Unknown Artist"
+        currentTrackAlbum = track.album?.name ?? ""
+        currentArtworkData = track.artworkData
+        track.lastPlayed = Date()
+        track.playCount += 1
     }
 
     // MARK: - Time Updates
