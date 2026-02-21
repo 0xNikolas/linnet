@@ -9,7 +9,11 @@ struct ContentView: View {
         NavigationSplitView {
             SidebarView(selectedItem: $selectedSidebarItem)
         } detail: {
-            ContentArea(tab: selectedTab, sidebarItem: selectedSidebarItem)
+            NavigationStack {
+                ContentArea(tab: selectedTab, sidebarItem: selectedSidebarItem)
+            }
+            .id(selectedTab)
+            .id(selectedSidebarItem)
         }
         .safeAreaInset(edge: .bottom) {
             NowPlayingBar()
