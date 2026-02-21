@@ -95,7 +95,7 @@ struct NowPlayingBar: View {
                 Button(action: { showQueue.toggle() }) {
                     Image(systemName: "list.bullet")
                         .font(.system(size: 14))
-                        .foregroundStyle(showQueue ? .tint : .primary)
+                        .foregroundColor(showQueue ? .accentColor : .primary)
                 }
                 .buttonStyle(.plain)
                 .popover(isPresented: $showQueue, arrowEdge: .top) {
