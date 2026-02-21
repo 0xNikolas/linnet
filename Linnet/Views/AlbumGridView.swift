@@ -14,16 +14,22 @@ struct AlbumGridView: View {
             } else {
                 LazyVGrid(columns: columns, spacing: 20) {
                     ForEach(albums) { album in
-                        AlbumCard(
-                            name: album.name,
-                            artist: album.artistName ?? "Unknown Artist",
-                            artwork: album.artworkData.flatMap { NSImage(data: $0) }
-                        )
+                        NavigationLink(value: album) {
+                            AlbumCard(
+                                name: album.name,
+                                artist: album.artistName ?? "Unknown Artist",
+                                artwork: album.artworkData.flatMap { NSImage(data: $0) }
+                            )
+                        }
+                        .buttonStyle(.plain)
                     }
                 }
                 .padding(20)
                 .animation(.default, value: albums.count)
             }
+        }
+        .navigationDestination(for: Album.self) { album in
+            AlbumDetailView(album: album)
         }
     }
 }
