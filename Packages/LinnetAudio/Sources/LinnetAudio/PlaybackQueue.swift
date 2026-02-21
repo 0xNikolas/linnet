@@ -6,7 +6,7 @@ public enum RepeatMode: Sendable {
 
 public struct PlaybackQueue: Sendable {
     private var tracks: [String] = []
-    private var currentIndex: Int = 0
+    public private(set) var currentIndex: Int = 0
     private var history: [Int] = []
     public var repeatMode: RepeatMode = .off
 

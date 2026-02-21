@@ -30,7 +30,6 @@ public final class PlayerViewModel {
     private let nowPlayingManager = NowPlayingManager.shared
     var queue = PlaybackQueue()
     private var queuedTracks: [Track] = []
-    private var currentTrackIndex: Int = 0
     private var timeUpdateTimer: Timer?
 
     init() {
@@ -73,9 +72,8 @@ public final class PlayerViewModel {
 
     func next() {
         if let nextPath = queue.advance() {
-            currentTrackIndex += 1
-            if currentTrackIndex < queuedTracks.count {
-                updateMetadata(for: queuedTracks[currentTrackIndex])
+            if queue.currentIndex < queuedTracks.count {
+                updateMetadata(for: queuedTracks[queue.currentIndex])
             }
             loadAndPlay(filePath: nextPath)
         } else {
@@ -89,9 +87,8 @@ public final class PlayerViewModel {
             return
         }
         if let prevPath = queue.goBack() {
-            currentTrackIndex -= 1
-            if currentTrackIndex >= 0, currentTrackIndex < queuedTracks.count {
-                updateMetadata(for: queuedTracks[currentTrackIndex])
+            if queue.currentIndex < queuedTracks.count {
+                updateMetadata(for: queuedTracks[queue.currentIndex])
             }
             loadAndPlay(filePath: prevPath)
         }
@@ -110,6 +107,7 @@ public final class PlayerViewModel {
     }
 
     func playTracks(_ filePaths: [String], startingAt index: Int = 0) {
+        queuedTracks = []
         queue = PlaybackQueue()
         queue.add(tracks: filePaths)
         for _ in 0..<index {
@@ -122,7 +120,6 @@ public final class PlayerViewModel {
 
     func playTrack(_ track: Track, queue: [Track], startingAt index: Int = 0) {
         queuedTracks = queue
-        currentTrackIndex = index
         let filePaths = queue.map(\.filePath)
         self.queue = PlaybackQueue()
         self.queue.add(tracks: filePaths)
@@ -130,7 +127,7 @@ public final class PlayerViewModel {
             _ = self.queue.advance()
         }
         if let current = self.queue.current {
-            updateMetadata(for: queuedTracks[index])
+            updateMetadata(for: queuedTracks[self.queue.currentIndex])
             loadAndPlay(filePath: current)
         }
     }
