@@ -35,8 +35,5 @@ struct ArtistListView: View {
                 }
             }
         }
-        .navigationDestination(for: Artist.self) { artist in
-            ArtistDetailView(artist: artist)
-        }
     }
 }

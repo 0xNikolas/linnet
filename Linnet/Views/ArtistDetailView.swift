@@ -6,8 +6,15 @@ struct ArtistDetailView: View {
     @Environment(PlayerViewModel.self) private var player
 
     private var allTracks: [Track] {
-        artist.tracks.sorted {
-            ($0.album?.name ?? "", $0.discNumber, $0.trackNumber) < ($1.album?.name ?? "", $1.discNumber, $1.trackNumber)
+        artist.tracks.sorted { lhs, rhs in
+            let lhsYear = lhs.album?.year ?? 0
+            let rhsYear = rhs.album?.year ?? 0
+            if lhsYear != rhsYear { return lhsYear > rhsYear }
+            let lhsAlbum = lhs.album?.name ?? ""
+            let rhsAlbum = rhs.album?.name ?? ""
+            if lhsAlbum != rhsAlbum { return lhsAlbum < rhsAlbum }
+            if lhs.discNumber != rhs.discNumber { return lhs.discNumber < rhs.discNumber }
+            return lhs.trackNumber < rhs.trackNumber
         }
     }
 
@@ -40,6 +47,7 @@ struct ArtistDetailView: View {
                                 }
                             }
                             .buttonStyle(.borderedProminent)
+                            .disabled(allTracks.isEmpty)
 
                             Button("Shuffle") {
                                 let shuffled = allTracks.shuffled()
@@ -48,6 +56,7 @@ struct ArtistDetailView: View {
                                 }
                             }
                             .buttonStyle(.bordered)
+                            .disabled(allTracks.isEmpty)
                         }
                     }
                 }
@@ -61,7 +70,7 @@ struct ArtistDetailView: View {
 
                     let columns = [GridItem(.adaptive(minimum: 160, maximum: 200), spacing: 20)]
                     LazyVGrid(columns: columns, spacing: 20) {
-                        ForEach(artist.albums.sorted(by: { ($0.year ?? 0) > ($1.year ?? 0) })) { album in
+                        ForEach(artist.albums.sorted(by: { ($0.year ?? Int.min) > ($1.year ?? Int.min) })) { album in
                             NavigationLink(value: album) {
                                 AlbumCard(
                                     name: album.name,
@@ -75,9 +84,6 @@ struct ArtistDetailView: View {
                     .padding(.horizontal, 20)
                 }
             }
-        }
-        .navigationDestination(for: Album.self) { album in
-            AlbumDetailView(album: album)
         }
     }
 }

@@ -1,4 +1,5 @@
 import SwiftUI
+import SwiftData
 import Observation
 import LinnetAudio
 import LinnetLibrary
@@ -44,9 +45,14 @@ public final class PlayerViewModel {
     var queue = PlaybackQueue()
     private var queuedTracks: [Track] = []
     private var timeUpdateTimer: Timer?
+    private var modelContext: ModelContext?
 
     init() {
         setupRemoteCommands()
+    }
+
+    func setModelContext(_ context: ModelContext) {
+        self.modelContext = context
     }
 
     func play() {
@@ -85,8 +91,9 @@ public final class PlayerViewModel {
 
     func next() {
         if let nextPath = queue.advance() {
-            if queue.currentIndex < queuedTracks.count {
-                updateMetadata(for: queuedTracks[queue.currentIndex])
+            let index = queue.currentIndex
+            if index < queuedTracks.count {
+                updateMetadata(for: queuedTracks[index])
             }
             loadAndPlay(filePath: nextPath)
         } else {
@@ -100,8 +107,9 @@ public final class PlayerViewModel {
             return
         }
         if let prevPath = queue.goBack() {
-            if queue.currentIndex < queuedTracks.count {
-                updateMetadata(for: queuedTracks[queue.currentIndex])
+            let index = queue.currentIndex
+            if index < queuedTracks.count {
+                updateMetadata(for: queuedTracks[index])
             }
             loadAndPlay(filePath: prevPath)
         }
@@ -120,12 +128,12 @@ public final class PlayerViewModel {
     }
 
     func playTracks(_ filePaths: [String], startingAt index: Int = 0) {
-        queuedTracks = []
         queue = PlaybackQueue()
         queue.add(tracks: filePaths)
         for _ in 0..<index {
             _ = queue.advance()
         }
+        queuedTracks = []
         if let current = queue.current {
             loadAndPlay(filePath: current)
         }
@@ -146,8 +154,8 @@ public final class PlayerViewModel {
     }
 
     func clearQueue() {
-        queue.clear()
         let currentTrack = currentQueueTrack
+        queue.clear()
         queuedTracks = currentTrack.map { [$0] } ?? []
     }
 
@@ -180,6 +188,7 @@ public final class PlayerViewModel {
         currentArtworkData = track.artworkData
         track.lastPlayed = Date()
         track.playCount += 1
+        try? modelContext?.save()
     }
 
     // MARK: - Time Updates

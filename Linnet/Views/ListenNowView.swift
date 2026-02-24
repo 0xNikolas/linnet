@@ -53,6 +53,11 @@ struct ListenNowView: View {
                                 .onTapGesture(count: 2) {
                                     player.playTrack(track, queue: displayedTracks, startingAt: index)
                                 }
+                                .contextMenu {
+                                    Button("Play") {
+                                        player.playTrack(track, queue: displayedTracks, startingAt: index)
+                                    }
+                                }
                             }
                         }
                     }
@@ -99,9 +104,6 @@ struct ListenNowView: View {
                 }
             }
             .padding(.bottom, 20)
-        }
-        .navigationDestination(for: Album.self) { album in
-            AlbumDetailView(album: album)
         }
     }
 }

@@ -59,6 +59,7 @@ struct AlbumDetailView: View {
                             }
                             .buttonStyle(.borderedProminent)
                             .tint(.accentColor)
+                            .disabled(sortedTracks.isEmpty)
 
                             Button("Shuffle") {
                                 let shuffled = sortedTracks.shuffled()
@@ -67,6 +68,7 @@ struct AlbumDetailView: View {
                                 }
                             }
                             .buttonStyle(.bordered)
+                            .disabled(sortedTracks.isEmpty)
                         }
                         .padding(.top, 4)
                     }
@@ -88,7 +90,7 @@ struct AlbumDetailView: View {
 
                         Spacer()
 
-                        Text(formatDuration(track.duration))
+                        Text(player.formatTime(track.duration))
                             .font(.system(size: 13, design: .monospaced))
                             .foregroundStyle(.secondary)
                     }
@@ -98,6 +100,11 @@ struct AlbumDetailView: View {
                     .onTapGesture(count: 2) {
                         player.playTrack(track, queue: sortedTracks, startingAt: index)
                     }
+                    .contextMenu {
+                        Button("Play") {
+                            player.playTrack(track, queue: sortedTracks, startingAt: index)
+                        }
+                    }
 
                     if index < sortedTracks.count - 1 {
                         Divider()
@@ -106,11 +113,5 @@ struct AlbumDetailView: View {
                 }
             }
         }
-    }
-
-    private func formatDuration(_ seconds: Double) -> String {
-        let mins = Int(seconds) / 60
-        let secs = Int(seconds) % 60
-        return String(format: "%d:%02d", mins, secs)
     }
 }

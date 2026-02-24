@@ -1,4 +1,5 @@
 import SwiftUI
+import LinnetLibrary
 
 struct ContentView: View {
     @State private var selectedTab: NavigationTab = .listenNow
@@ -11,9 +12,14 @@ struct ContentView: View {
         } detail: {
             NavigationStack {
                 ContentArea(tab: selectedTab, sidebarItem: selectedSidebarItem)
+                    .navigationDestination(for: Album.self) { album in
+                        AlbumDetailView(album: album)
+                    }
+                    .navigationDestination(for: Artist.self) { artist in
+                        ArtistDetailView(artist: artist)
+                    }
             }
-            .id(selectedTab)
-            .id(selectedSidebarItem)
+            .id("\(selectedTab)-\(selectedSidebarItem.map { "\($0)" } ?? "none")")
         }
         .safeAreaInset(edge: .bottom) {
             NowPlayingBar()

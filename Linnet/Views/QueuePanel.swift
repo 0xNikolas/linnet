@@ -47,7 +47,7 @@ struct QueuePanel: View {
                                     .padding(.horizontal)
                             }
                         } header: {
-                            sectionHeader("Up Next \u{2014} \(upcoming.count) songs")
+                            sectionHeader("Up Next — \(upcoming.count) songs")
                         }
                     }
                 }
