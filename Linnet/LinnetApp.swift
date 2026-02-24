@@ -5,6 +5,9 @@ import LinnetLibrary
 @main
 struct LinnetApp: App {
     @State private var playerViewModel = PlayerViewModel()
+    @State private var artworkService = ArtworkService()
+    @AppStorage("acoustIDAPIKey") private var acoustIDKey = ""
+    @AppStorage("fanartTVAPIKey") private var fanartTVKey = ""
 
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([Track.self, Album.self, Artist.self, Playlist.self, PlaylistEntry.self, WatchedFolder.self])
@@ -20,8 +23,15 @@ struct LinnetApp: App {
         WindowGroup {
             ContentView()
                 .environment(playerViewModel)
+                .environment(artworkService)
                 .onAppear {
                     playerViewModel.setModelContext(sharedModelContainer.mainContext)
+                }
+                .onChange(of: fanartTVKey, initial: true) { _, newValue in
+                    artworkService.fanartTVAPIKey = newValue
+                }
+                .onChange(of: acoustIDKey, initial: true) { _, newValue in
+                    artworkService.acoustIDAPIKey = newValue
                 }
         }
         .windowStyle(.titleBar)
