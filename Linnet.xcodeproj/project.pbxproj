@@ -7,10 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		05D9C4016E079AB4134EEB99 /* LinnetApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E9159929F26EB66FA7D7AA6 /* LinnetApp.swift */; };
 		15C1C4DBA3B8F04102229E97 /* LinnetAI in Frameworks */ = {isa = PBXBuildFile; productRef = 5E6D901B81466E142FD6C910 /* LinnetAI */; };
 		223EB684639D03602B1D03F4 /* LinnetLibrary in Frameworks */ = {isa = PBXBuildFile; productRef = 15E14F532D38EDBCDA206E74 /* LinnetLibrary */; };
-		83C20C4B929A3EA0ACF80530 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 71A92EA0026F8A9B0A55487F /* ContentView.swift */; };
 		870B1858D72001D9229AA1DB /* LinnetAudio in Frameworks */ = {isa = PBXBuildFile; productRef = ADC34EBDB8FF5FA9927D9707 /* LinnetAudio */; };
 /* End PBXBuildFile section */
 
@@ -18,10 +16,16 @@
 		4C3B240A06E5F91C0EB5A341 /* LinnetAudio */ = {isa = PBXFileReference; lastKnownFileType = folder; name = LinnetAudio; path = Packages/LinnetAudio; sourceTree = SOURCE_ROOT; };
 		602C475B1D70E1CBE074F5E2 /* Linnet.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Linnet.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		695575C8558487FEAF0DA78C /* LinnetLibrary */ = {isa = PBXFileReference; lastKnownFileType = folder; name = LinnetLibrary; path = Packages/LinnetLibrary; sourceTree = SOURCE_ROOT; };
-		71A92EA0026F8A9B0A55487F /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
-		7E9159929F26EB66FA7D7AA6 /* LinnetApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LinnetApp.swift; sourceTree = "<group>"; };
 		FBC3D93793F573CCE0B71639 /* LinnetAI */ = {isa = PBXFileReference; lastKnownFileType = folder; name = LinnetAI; path = Packages/LinnetAI; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		72F7B11244762336EDC94C2C /* Linnet */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = Linnet;
+			sourceTree = "<group>";
+		};
+/* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		B2B69DF024C12B4BD32899B8 /* Frameworks */ = {
@@ -44,15 +48,6 @@
 				7D8A3B5734B4BA87B47011D1 /* Packages */,
 				F3061EB395E3EB0D3FB0BE05 /* Products */,
 			);
-			sourceTree = "<group>";
-		};
-		72F7B11244762336EDC94C2C /* Linnet */ = {
-			isa = PBXGroup;
-			children = (
-				71A92EA0026F8A9B0A55487F /* ContentView.swift */,
-				7E9159929F26EB66FA7D7AA6 /* LinnetApp.swift */,
-			);
-			path = Linnet;
 			sourceTree = "<group>";
 		};
 		7D8A3B5734B4BA87B47011D1 /* Packages */ = {
@@ -86,6 +81,9 @@
 			buildRules = (
 			);
 			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				72F7B11244762336EDC94C2C /* Linnet */,
 			);
 			name = Linnet;
 			packageProductDependencies = (
@@ -135,8 +133,6 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				83C20C4B929A3EA0ACF80530 /* ContentView.swift in Sources */,
-				05D9C4016E079AB4134EEB99 /* LinnetApp.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -148,12 +144,13 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				COMBINE_HIDPI_IMAGES = YES;
+				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.music";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.linnet.app;
 				SDKROOT = macosx;
 			};
@@ -164,12 +161,13 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				COMBINE_HIDPI_IMAGES = YES;
+				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.music";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.linnet.app;
 				SDKROOT = macosx;
 			};
@@ -226,7 +224,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
@@ -283,7 +281,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
