@@ -5,6 +5,7 @@ extension Notification.Name {
     static let navigateToCurrentArtist = Notification.Name("navigateToCurrentArtist")
     static let highlightTrackInDetail = Notification.Name("highlightTrackInDetail")
     static let focusSearch = Notification.Name("focusSearch")
+    static let openSettings = Notification.Name("openSettings")
 }
 
 struct NowPlayingBar: View {

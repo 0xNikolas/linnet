@@ -1,6 +1,7 @@
 import SwiftUI
 import SwiftData
 import LinnetLibrary
+import UniformTypeIdentifiers
 
 struct ArtistListView: View {
     @Query(sort: \Artist.name) private var artists: [Artist]
@@ -111,13 +112,30 @@ private struct ArtistRow: View {
         .contextMenu {
             Button("Find Artwork") {
                 Task {
+                    artist.artworkData = nil
                     isFetching = true
                     await artworkService.fetchArtistArtwork(for: artist, context: modelContext, force: true)
                     isFetching = false
                 }
             }
+            Button("Choose Artwork...") {
+                chooseArtworkFile()
+            }
             Divider()
             Button("Remove from Library", role: .destructive) { onRemove() }
+        }
+    }
+
+    private func chooseArtworkFile() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.image]
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.message = "Choose artwork for \"\(artist.name)\""
+        if panel.runModal() == .OK, let url = panel.url,
+           let data = try? Data(contentsOf: url) {
+            artist.artworkData = data
+            try? modelContext.save()
         }
     }
 }

@@ -1,6 +1,7 @@
 import SwiftUI
 import SwiftData
 import LinnetLibrary
+import UniformTypeIdentifiers
 
 private func formatTime(_ seconds: Double) -> String {
     let mins = Int(seconds) / 60
@@ -14,6 +15,7 @@ struct AlbumDetailView: View {
     @Environment(ArtworkService.self) private var artworkService
     @Environment(\.modelContext) private var modelContext
     @State private var isFetchingArtwork = false
+    @State private var showEditSheet = false
     @AppStorage("nowPlayingBarHeight") private var barHeight: Double = 56
 
     private var sortedTracks: [Track] {
@@ -52,11 +54,17 @@ struct AlbumDetailView: View {
                     .contextMenu {
                         Button("Find Artwork") {
                             Task {
+                                album.artworkData = nil
                                 isFetchingArtwork = true
                                 await artworkService.fetchAlbumArtwork(for: album, context: modelContext, force: true)
                                 isFetchingArtwork = false
                             }
                         }
+                        Button("Choose Artwork...") {
+                            chooseArtworkFile()
+                        }
+                        Divider()
+                        Button("Edit Album...") { showEditSheet = true }
                     }
                     .shadow(color: .black.opacity(0.2), radius: 8, y: 4)
 
@@ -120,6 +128,25 @@ struct AlbumDetailView: View {
                     removeTracks(ids: trackIDs)
                 }
             )
+        }
+        .sheet(isPresented: $showEditSheet) {
+            EditAlbumSheet(album: album)
+        }
+    }
+
+    private func chooseArtworkFile() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.image]
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.message = "Choose artwork for \"\(album.name)\""
+        if panel.runModal() == .OK, let url = panel.url,
+           let data = try? Data(contentsOf: url) {
+            album.artworkData = data
+            for track in album.tracks where track.artworkData == nil {
+                track.artworkData = data
+            }
+            try? modelContext.save()
         }
     }
 

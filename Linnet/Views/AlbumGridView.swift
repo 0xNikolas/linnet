@@ -1,6 +1,7 @@
 import SwiftUI
 import SwiftData
 import LinnetLibrary
+import UniformTypeIdentifiers
 
 struct AlbumGridView: View {
     @Query(sort: \Album.name) private var albums: [Album]
@@ -81,6 +82,7 @@ private struct AlbumGridItem: View {
     @Environment(ArtworkService.self) private var artworkService
     @Environment(\.modelContext) private var modelContext
     @State private var isFetching = false
+    @State private var showEditSheet = false
 
     var body: some View {
         AlbumCard(
@@ -105,13 +107,38 @@ private struct AlbumGridItem: View {
         .contextMenu {
             Button("Find Artwork") {
                 Task {
+                    album.artworkData = nil
                     isFetching = true
                     await artworkService.fetchAlbumArtwork(for: album, context: modelContext, force: true)
                     isFetching = false
                 }
             }
+            Button("Choose Artwork...") {
+                chooseArtworkFile(for: album)
+            }
+            Divider()
+            Button("Edit Album...") { showEditSheet = true }
             Divider()
             Button("Remove from Library", role: .destructive) { onRemove() }
+        }
+        .sheet(isPresented: $showEditSheet) {
+            EditAlbumSheet(album: album)
+        }
+    }
+
+    private func chooseArtworkFile(for album: Album) {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.image]
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.message = "Choose artwork for \"\(album.name)\""
+        if panel.runModal() == .OK, let url = panel.url,
+           let data = try? Data(contentsOf: url) {
+            album.artworkData = data
+            for track in album.tracks where track.artworkData == nil {
+                track.artworkData = data
+            }
+            try? modelContext.save()
         }
     }
 }

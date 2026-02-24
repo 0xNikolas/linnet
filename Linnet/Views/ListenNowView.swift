@@ -152,29 +152,25 @@ struct ListenNowView: View {
                     }
 
                     if searchText.isEmpty {
-                        HorizontalScrollRow(title: "AI Suggestions") {
-                            ForEach(1...6, id: \.self) { _ in
-                                VStack(alignment: .leading, spacing: 6) {
-                                    RoundedRectangle(cornerRadius: 8)
-                                        .fill(.quaternary)
-                                        .frame(width: 160, height: 160)
-                                        .overlay {
-                                            Image(systemName: "sparkles")
-                                                .font(.system(size: 30))
-                                                .foregroundStyle(.secondary)
-                                        }
-                                        .clipShape(RoundedRectangle(cornerRadius: 8))
-
-                                    Text("Set up AI")
-                                        .font(.system(size: 13, weight: .medium))
-                                        .foregroundStyle(.secondary)
-                                    Text("Enable in Settings")
-                                        .font(.system(size: 11))
-                                        .foregroundStyle(.tertiary)
-                                }
-                                .frame(width: 160)
+                        VStack(spacing: 12) {
+                            Image(systemName: "sparkles")
+                                .font(.system(size: 28))
+                                .foregroundStyle(.secondary)
+                            Text("AI Suggestions")
+                                .font(.system(size: 15, weight: .semibold))
+                                .foregroundStyle(.secondary)
+                            Text("Set up AI in Settings to get personalized recommendations.")
+                                .font(.system(size: 13))
+                                .foregroundStyle(.tertiary)
+                                .multilineTextAlignment(.center)
+                            Button("Open Settings...") {
+                                NotificationCenter.default.post(name: .openSettings, object: nil)
                             }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
                         }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 30)
                     }
                 }
             }

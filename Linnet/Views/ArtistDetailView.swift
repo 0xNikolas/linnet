@@ -1,6 +1,7 @@
 import SwiftUI
 import SwiftData
 import LinnetLibrary
+import UniformTypeIdentifiers
 
 struct ArtistDetailView: View {
     let artist: Artist
@@ -58,10 +59,14 @@ struct ArtistDetailView: View {
                         .contextMenu {
                             Button("Find Artwork") {
                                 Task {
+                                    artist.artworkData = nil
                                     isFetchingArtwork = true
                                     await artworkService.fetchArtistArtwork(for: artist, context: modelContext, force: true)
                                     isFetchingArtwork = false
                                 }
+                            }
+                            Button("Choose Artwork...") {
+                                chooseArtistArtwork()
                             }
                         }
 
@@ -104,37 +109,19 @@ struct ArtistDetailView: View {
                     let columns = [GridItem(.adaptive(minimum: 160, maximum: 200), spacing: 20)]
                     LazyVGrid(columns: columns, spacing: 20) {
                         ForEach(artist.albums.sorted(by: { ($0.year ?? Int.min) > ($1.year ?? Int.min) })) { album in
-                            AlbumCard(
-                                name: album.name,
-                                artist: artist.name,
-                                artwork: album.artworkData.flatMap { NSImage(data: $0) }
+                            ArtistAlbumCard(
+                                album: album,
+                                artistName: artist.name,
+                                isSelected: selectedAlbumID == album.persistentModelID,
+                                onSelect: {
+                                    selectedAlbumID = album.persistentModelID
+                                    selectedTrackID = nil
+                                },
+                                onNavigate: {
+                                    navigationPath.wrappedValue.append(album)
+                                },
+                                onRemove: { removeAlbum(album) }
                             )
-                            .padding(6)
-                            .background(
-                                RoundedRectangle(cornerRadius: 10)
-                                    .fill(selectedAlbumID == album.persistentModelID
-                                          ? Color.accentColor.opacity(0.15)
-                                          : Color.clear)
-                            )
-                            .contentShape(Rectangle())
-                            .onClicks(single: {
-                                selectedAlbumID = album.persistentModelID
-                                selectedTrackID = nil
-                            }, double: {
-                                navigationPath.wrappedValue.append(album)
-                            })
-                            .contextMenu {
-                                Button("Find Artwork") {
-                                    Task {
-                                        await artworkService.fetchAlbumArtwork(for: album, context: modelContext, force: true)
-                                    }
-                                }
-                                AddToPlaylistMenu(tracks: album.tracks)
-                                Divider()
-                                Button("Remove Album from Library", role: .destructive) {
-                                    removeAlbum(album)
-                                }
-                            }
                         }
                     }
                     .padding(.horizontal, 20)
@@ -206,6 +193,19 @@ struct ArtistDetailView: View {
         }
         try? modelContext.save()
     }
+
+    private func chooseArtistArtwork() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.image]
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.message = "Choose artwork for \"\(artist.name)\""
+        if panel.runModal() == .OK, let url = panel.url,
+           let data = try? Data(contentsOf: url) {
+            artist.artworkData = data
+            try? modelContext.save()
+        }
+    }
 }
 
 // MARK: - Artist Track Row
@@ -215,6 +215,77 @@ private func formatTime(_ seconds: Double) -> String {
     let secs = Int(seconds) % 60
     return String(format: "%d:%02d", mins, secs)
 }
+
+// MARK: - Artist Album Card
+
+private struct ArtistAlbumCard: View {
+    let album: Album
+    let artistName: String
+    let isSelected: Bool
+    let onSelect: () -> Void
+    let onNavigate: () -> Void
+    let onRemove: () -> Void
+
+    @Environment(ArtworkService.self) private var artworkService
+    @Environment(\.modelContext) private var modelContext
+    @State private var isFetching = false
+    @State private var showEditSheet = false
+
+    var body: some View {
+        AlbumCard(
+            name: album.name,
+            artist: artistName,
+            artwork: album.artworkData.flatMap { NSImage(data: $0) },
+            isLoading: isFetching
+        )
+        .padding(6)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(isSelected ? Color.accentColor.opacity(0.15) : Color.clear)
+        )
+        .contentShape(Rectangle())
+        .onClicks(single: { onSelect() }, double: { onNavigate() })
+        .contextMenu {
+            Button("Find Artwork") {
+                Task {
+                    album.artworkData = nil
+                    isFetching = true
+                    await artworkService.fetchAlbumArtwork(for: album, context: modelContext, force: true)
+                    isFetching = false
+                }
+            }
+            Button("Choose Artwork...") {
+                chooseArtworkFile()
+            }
+            AddToPlaylistMenu(tracks: album.tracks)
+            Divider()
+            Button("Edit Album...") { showEditSheet = true }
+            Divider()
+            Button("Remove Album from Library", role: .destructive) { onRemove() }
+        }
+        .sheet(isPresented: $showEditSheet) {
+            EditAlbumSheet(album: album)
+        }
+    }
+
+    private func chooseArtworkFile() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.image]
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.message = "Choose artwork for \"\(album.name)\""
+        if panel.runModal() == .OK, let url = panel.url,
+           let data = try? Data(contentsOf: url) {
+            album.artworkData = data
+            for track in album.tracks where track.artworkData == nil {
+                track.artworkData = data
+            }
+            try? modelContext.save()
+        }
+    }
+}
+
+// MARK: - Artist Track Row
 
 private struct ArtistTrackRow: View {
     let track: Track
