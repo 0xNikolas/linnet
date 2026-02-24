@@ -1,9 +1,19 @@
 import SwiftUI
+import SwiftData
 import LinnetLibrary
+
+private func formatTime(_ seconds: Double) -> String {
+    let mins = Int(seconds) / 60
+    let secs = Int(seconds) % 60
+    return String(format: "%d:%02d", mins, secs)
+}
 
 struct AlbumDetailView: View {
     let album: Album
     @Environment(PlayerViewModel.self) private var player
+    @Environment(ArtworkService.self) private var artworkService
+    @Environment(\.modelContext) private var modelContext
+    @State private var isFetchingArtwork = false
 
     private var sortedTracks: [Track] {
         album.tracks.sorted {
@@ -12,106 +22,186 @@ struct AlbumDetailView: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 0) {
-                // Header
-                HStack(alignment: .bottom, spacing: 20) {
-                    RoundedRectangle(cornerRadius: 8)
-                        .fill(.quaternary)
-                        .frame(width: 200, height: 200)
-                        .overlay {
-                            if let artData = album.artworkData, let img = NSImage(data: artData) {
-                                Image(nsImage: img)
-                                    .resizable()
-                                    .scaledToFill()
-                            } else {
-                                Image(systemName: "music.note")
-                                    .font(.system(size: 40))
-                                    .foregroundStyle(.secondary)
+        VStack(alignment: .leading, spacing: 0) {
+            // Header
+            HStack(alignment: .bottom, spacing: 20) {
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(.quaternary)
+                    .frame(width: 200, height: 200)
+                    .overlay {
+                        if let artData = album.artworkData, let img = NSImage(data: artData) {
+                            Image(nsImage: img)
+                                .resizable()
+                                .scaledToFill()
+                        } else if isFetchingArtwork {
+                            ProgressView()
+                        } else {
+                            Image(systemName: "music.note")
+                                .font(.system(size: 40))
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .task {
+                        guard album.artworkData == nil else { return }
+                        isFetchingArtwork = true
+                        await artworkService.fetchAlbumArtwork(for: album, context: modelContext)
+                        isFetchingArtwork = false
+                    }
+                    .contextMenu {
+                        Button("Find Artwork") {
+                            Task {
+                                isFetchingArtwork = true
+                                await artworkService.fetchAlbumArtwork(for: album, context: modelContext)
+                                isFetchingArtwork = false
                             }
                         }
-                        .clipShape(RoundedRectangle(cornerRadius: 8))
-                        .shadow(color: .black.opacity(0.2), radius: 8, y: 4)
+                    }
+                    .shadow(color: .black.opacity(0.2), radius: 8, y: 4)
 
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text(album.name)
-                            .font(.system(size: 28, weight: .bold))
-                        Text(album.artistName ?? "Unknown Artist")
-                            .font(.system(size: 18))
-                            .foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(album.name)
+                        .font(.system(size: 28, weight: .bold))
+                    Text(album.artistName ?? "Unknown Artist")
+                        .font(.system(size: 18))
+                        .foregroundStyle(.secondary)
 
-                        HStack(spacing: 8) {
-                            if let year = album.year {
-                                Text(String(year))
-                                    .font(.system(size: 13))
-                                    .foregroundStyle(.tertiary)
-                            }
-                            Text("\(sortedTracks.count) songs")
+                    HStack(spacing: 8) {
+                        if let year = album.year {
+                            Text(String(year))
                                 .font(.system(size: 13))
                                 .foregroundStyle(.tertiary)
                         }
-
-                        HStack(spacing: 12) {
-                            Button("Play") {
-                                if let first = sortedTracks.first {
-                                    player.playTrack(first, queue: sortedTracks, startingAt: 0)
-                                }
-                            }
-                            .buttonStyle(.borderedProminent)
-                            .tint(.accentColor)
-                            .disabled(sortedTracks.isEmpty)
-
-                            Button("Shuffle") {
-                                let shuffled = sortedTracks.shuffled()
-                                if let first = shuffled.first {
-                                    player.playTrack(first, queue: shuffled, startingAt: 0)
-                                }
-                            }
-                            .buttonStyle(.bordered)
-                            .disabled(sortedTracks.isEmpty)
-                        }
-                        .padding(.top, 4)
-                    }
-                }
-                .padding(20)
-
-                Divider()
-
-                // Track list
-                ForEach(Array(sortedTracks.enumerated()), id: \.element.id) { index, track in
-                    HStack {
-                        Text("\(track.trackNumber)")
+                        Text("\(sortedTracks.count) songs")
                             .font(.system(size: 13))
-                            .foregroundStyle(.secondary)
-                            .frame(width: 30, alignment: .trailing)
-
-                        Text(track.title)
-                            .font(.system(size: 13))
-
-                        Spacer()
-
-                        Text(player.formatTime(track.duration))
-                            .font(.system(size: 13, design: .monospaced))
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(.tertiary)
                     }
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 8)
-                    .contentShape(Rectangle())
-                    .onTapGesture(count: 2) {
-                        player.playTrack(track, queue: sortedTracks, startingAt: index)
-                    }
-                    .contextMenu {
+
+                    HStack(spacing: 12) {
                         Button("Play") {
-                            player.playTrack(track, queue: sortedTracks, startingAt: index)
+                            if let first = sortedTracks.first {
+                                player.playTrack(first, queue: sortedTracks, startingAt: 0)
+                            }
                         }
-                    }
+                        .buttonStyle(.borderedProminent)
+                        .tint(.accentColor)
+                        .disabled(sortedTracks.isEmpty)
 
-                    if index < sortedTracks.count - 1 {
-                        Divider()
-                            .padding(.leading, 60)
+                        Button("Shuffle") {
+                            let shuffled = sortedTracks.shuffled()
+                            if let first = shuffled.first {
+                                player.playTrack(first, queue: shuffled, startingAt: 0)
+                            }
+                        }
+                        .buttonStyle(.bordered)
+                        .disabled(sortedTracks.isEmpty)
                     }
+                    .padding(.top, 4)
+                }
+            }
+            .padding(20)
+
+            Divider()
+
+            // Track list with native multi-selection
+            AlbumTrackListView(
+                sortedTracks: sortedTracks,
+                onPlay: { track, queue, index in
+                    player.playTrack(track, queue: queue, startingAt: index)
+                },
+                onPlayNext: { track in
+                    player.addNext(track)
+                },
+                onPlayLater: { track in
+                    player.addLater(track)
+                },
+                onRemove: { trackIDs in
+                    removeTracks(ids: trackIDs)
+                }
+            )
+        }
+    }
+
+    private func removeTracks(ids: Set<PersistentIdentifier>) {
+        for id in ids {
+            if let track = sortedTracks.first(where: { $0.id == id }) {
+                let album = track.album
+                let artist = track.artist
+                modelContext.delete(track)
+                if let album, album.tracks.isEmpty {
+                    modelContext.delete(album)
+                }
+                if let artist, artist.tracks.isEmpty {
+                    modelContext.delete(artist)
                 }
             }
         }
+        try? modelContext.save()
+    }
+}
+
+// MARK: - AlbumTrackListView (no player environment -- immune to timer-driven redraws)
+
+private struct AlbumTrackListView: View {
+    let sortedTracks: [Track]
+    let onPlay: (Track, [Track], Int) -> Void
+    let onPlayNext: (Track) -> Void
+    let onPlayLater: (Track) -> Void
+    let onRemove: (Set<PersistentIdentifier>) -> Void
+
+    @State private var selectedTrackIDs: Set<PersistentIdentifier> = []
+
+    var body: some View {
+        List(sortedTracks, selection: $selectedTrackIDs) { track in
+            HStack {
+                Text("\(track.trackNumber)")
+                    .font(.system(size: 13))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 30, alignment: .trailing)
+
+                Text(track.title)
+                    .font(.system(size: 13))
+
+                Spacer()
+
+                Text(formatTime(track.duration))
+                    .font(.system(size: 13, design: .monospaced))
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .listStyle(.inset)
+        .contextMenu(forSelectionType: PersistentIdentifier.self) { ids in
+            contextMenuContent(for: ids)
+        } primaryAction: { ids in
+            if let id = ids.first, let index = sortedTracks.firstIndex(where: { $0.id == id }) {
+                onPlay(sortedTracks[index], sortedTracks, index)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func contextMenuContent(for ids: Set<PersistentIdentifier>) -> some View {
+        if let id = ids.first, let index = sortedTracks.firstIndex(where: { $0.id == id }) {
+            let track = sortedTracks[index]
+            Button("Play") {
+                onPlay(track, sortedTracks, index)
+            }
+            Button("Play Next") {
+                onPlayNext(track)
+            }
+            Button("Play Later") {
+                onPlayLater(track)
+            }
+            Divider()
+            AddToPlaylistMenu(tracks: selectedTracks(for: ids))
+            Divider()
+            Button("Remove from Library", role: .destructive) {
+                onRemove(ids)
+            }
+        }
+    }
+
+    private func selectedTracks(for ids: Set<PersistentIdentifier>) -> [Track] {
+        sortedTracks.filter { ids.contains($0.id) }
     }
 }
