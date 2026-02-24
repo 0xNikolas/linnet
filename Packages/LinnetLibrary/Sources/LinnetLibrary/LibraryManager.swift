@@ -27,7 +27,7 @@ public actor LibraryManager {
 
         for fileURL in audioFiles {
             let metadata = try await extractor.extract(from: fileURL)
-            results.append(ScanResult(filePath: fileURL.path(), metadata: metadata))
+            results.append(ScanResult(filePath: fileURL.path, metadata: metadata))
         }
 
         return results

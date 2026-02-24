@@ -38,6 +38,13 @@ struct LinnetApp: App {
         .defaultSize(width: 1100, height: 700)
         .modelContainer(sharedModelContainer)
         .commands {
+            CommandGroup(after: .textEditing) {
+                Button("Find...") {
+                    NotificationCenter.default.post(name: .focusSearch, object: nil)
+                }
+                .keyboardShortcut("f")
+            }
+
             CommandMenu("Playback") {
                 Button("Play/Pause") {
                     playerViewModel.togglePlayPause()

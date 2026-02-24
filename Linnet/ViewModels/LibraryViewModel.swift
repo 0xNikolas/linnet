@@ -15,13 +15,14 @@ public final class LibraryViewModel {
     private var fileWatcher = FileWatcher()
 
     func addFolder(url: URL, context: ModelContext) {
-        let folder = WatchedFolder(path: url.path())
+        let bookmark = try? url.bookmarkData(options: .withSecurityScope, includingResourceValuesForKeys: nil, relativeTo: nil)
+        let folder = WatchedFolder(path: url.path, bookmarkData: bookmark)
         context.insert(folder)
         try? context.save()
 
         scanFolder(url: url, context: context)
 
-        fileWatcher.watch(folder: url.path()) { [weak self] _ in
+        fileWatcher.watch(folder: url.path) { [weak self] _ in
             Task { @MainActor [weak self] in
                 self?.scanFolder(url: url, context: context)
             }
@@ -54,21 +55,38 @@ public final class LibraryViewModel {
 
         Task {
             for folder in folders {
-                scanProgress = "Scanning \(URL(filePath: folder.path).lastPathComponent)..."
+                let folderURL = resolveFolder(folder)
+                scanProgress = "Scanning \(folderURL.lastPathComponent)..."
                 do {
-                    let results = try await libraryManager.scanFolder(url: URL(filePath: folder.path))
+                    let results = try await libraryManager.scanFolder(url: folderURL)
                     let count = importResults(results, context: context)
                     totalImported += count
                     folder.lastScanned = Date()
                 } catch {
                     scanProgress = "Error scanning \(folder.path): \(error.localizedDescription)"
                 }
+                folderURL.stopAccessingSecurityScopedResource()
             }
             try? context.save()
             lastScanCount = totalImported
             scanProgress = "Imported \(totalImported) tracks total"
             isScanning = false
         }
+    }
+
+    /// Resolve a watched folder's bookmark to get a security-scoped URL
+    private func resolveFolder(_ folder: WatchedFolder) -> URL {
+        if let bookmarkData = folder.bookmarkData {
+            var isStale = false
+            if let url = try? URL(resolvingBookmarkData: bookmarkData, options: .withSecurityScope, relativeTo: nil, bookmarkDataIsStale: &isStale) {
+                _ = url.startAccessingSecurityScopedResource()
+                if isStale {
+                    folder.bookmarkData = try? url.bookmarkData(options: .withSecurityScope, includingResourceValuesForKeys: nil, relativeTo: nil)
+                }
+                return url
+            }
+        }
+        return URL(filePath: folder.path)
     }
 
     func startWatching(folders: [WatchedFolder], context: ModelContext) {
@@ -92,14 +110,33 @@ public final class LibraryViewModel {
         var importedCount = 0
 
         for result in results {
-            // Skip if already imported
+            // Skip if same file path already imported
             let path = result.filePath
             var descriptor = FetchDescriptor<Track>(predicate: #Predicate { $0.filePath == path })
             descriptor.fetchLimit = 1
             let existing = (try? context.fetch(descriptor)) ?? []
             if !existing.isEmpty { continue }
 
+            // Skip if duplicate content (same title + artist + similar duration)
+            // Use 3s tolerance to catch remasters/compilations of the same recording
             let metadata = result.metadata
+            let title = metadata.title ?? URL(filePath: path).deletingPathExtension().lastPathComponent
+            let dur = metadata.duration
+            let durLow = dur - 3.0
+            let durHigh = dur + 3.0
+            if let artistName = metadata.artist {
+                var dupDescriptor = FetchDescriptor<Track>(predicate: #Predicate {
+                    $0.title == title && $0.artist?.name == artistName && $0.duration >= durLow && $0.duration <= durHigh
+                })
+                dupDescriptor.fetchLimit = 1
+                if let dups = try? context.fetch(dupDescriptor), !dups.isEmpty { continue }
+            } else {
+                var dupDescriptor = FetchDescriptor<Track>(predicate: #Predicate {
+                    $0.title == title && $0.artist == nil && $0.duration >= durLow && $0.duration <= durHigh
+                })
+                dupDescriptor.fetchLimit = 1
+                if let dups = try? context.fetch(dupDescriptor), !dups.isEmpty { continue }
+            }
 
             // Find or create artist
             var artist: Artist?
@@ -147,6 +184,11 @@ public final class LibraryViewModel {
             track.artist = artist
             track.album = album
             track.artworkData = metadata.artwork
+            track.bitrate = metadata.bitrate
+            track.sampleRate = metadata.sampleRate
+            track.channels = metadata.channels
+            track.codec = metadata.codec
+            track.fileSize = metadata.fileSize
             context.insert(track)
             importedCount += 1
         }

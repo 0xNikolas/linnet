@@ -14,6 +14,7 @@ struct AlbumDetailView: View {
     @Environment(ArtworkService.self) private var artworkService
     @Environment(\.modelContext) private var modelContext
     @State private var isFetchingArtwork = false
+    @AppStorage("nowPlayingBarHeight") private var barHeight: Double = 56
 
     private var sortedTracks: [Track] {
         album.tracks.sorted {
@@ -52,7 +53,7 @@ struct AlbumDetailView: View {
                         Button("Find Artwork") {
                             Task {
                                 isFetchingArtwork = true
-                                await artworkService.fetchAlbumArtwork(for: album, context: modelContext)
+                                await artworkService.fetchAlbumArtwork(for: album, context: modelContext, force: true)
                                 isFetchingArtwork = false
                             }
                         }
@@ -150,6 +151,7 @@ private struct AlbumTrackListView: View {
     let onRemove: (Set<PersistentIdentifier>) -> Void
 
     @State private var selectedTrackIDs: Set<PersistentIdentifier> = []
+    @AppStorage("nowPlayingBarHeight") private var barHeight: Double = 56
 
     var body: some View {
         List(sortedTracks, selection: $selectedTrackIDs) { track in
@@ -170,6 +172,7 @@ private struct AlbumTrackListView: View {
             }
         }
         .listStyle(.inset)
+        .contentMargins(.bottom, barHeight + 20, for: .scrollContent)
         .contextMenu(forSelectionType: PersistentIdentifier.self) { ids in
             contextMenuContent(for: ids)
         } primaryAction: { ids in

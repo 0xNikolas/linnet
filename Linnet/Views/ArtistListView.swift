@@ -8,11 +8,13 @@ struct ArtistListView: View {
     @Environment(\.navigationPath) private var navigationPath
     @State private var selectedArtistID: PersistentIdentifier?
     @State private var searchText = ""
+    @State private var isSearchPresented = false
+    @AppStorage("nowPlayingBarHeight") private var barHeight: Double = 56
 
     private var filteredArtists: [Artist] {
         if searchText.isEmpty { return artists }
         let query = searchText
-        return artists.filter { $0.name.localizedCaseInsensitiveContains(query) }
+        return artists.filter { $0.name.searchContains(query) }
     }
 
     var body: some View {
@@ -33,8 +35,11 @@ struct ArtistListView: View {
                 }
             }
         }
-        .contentMargins(.bottom, 60, for: .scrollContent)
-        .searchable(text: $searchText, prompt: "Search artists...")
+        .contentMargins(.bottom, barHeight + 20, for: .scrollContent)
+        .searchable(text: $searchText, isPresented: $isSearchPresented, prompt: "Search artists...")
+        .onReceive(NotificationCenter.default.publisher(for: .focusSearch)) { _ in
+            isSearchPresented = true
+        }
         .contextMenu(forSelectionType: PersistentIdentifier.self, menu: { _ in }, primaryAction: { identifiers in
             guard let id = identifiers.first,
                   let artist = filteredArtists.first(where: { $0.persistentModelID == id }) else { return }
@@ -86,6 +91,7 @@ private struct ArtistRow: View {
                     }
                 }
                 .clipShape(Circle())
+                .allowsHitTesting(false)
 
             VStack(alignment: .leading) {
                 Text(artist.name)
@@ -106,7 +112,7 @@ private struct ArtistRow: View {
             Button("Find Artwork") {
                 Task {
                     isFetching = true
-                    await artworkService.fetchArtistArtwork(for: artist, context: modelContext)
+                    await artworkService.fetchArtistArtwork(for: artist, context: modelContext, force: true)
                     isFetching = false
                 }
             }

@@ -9,18 +9,20 @@ struct ListenNowView: View {
     @Environment(ArtworkService.self) private var artworkService
     @Environment(\.modelContext) private var modelContext
     @State private var searchText = ""
+    @State private var isSearchPresented = false
     @State private var selectedTrackID: PersistentIdentifier?
     @State private var selectedAlbumID: PersistentIdentifier?
     @Environment(\.navigationPath) private var navigationPath
+    @AppStorage("nowPlayingBarHeight") private var barHeight: Double = 56
 
     private var filteredRecentTracks: [Track] {
         let source = Array(recentTracks.prefix(20))
         if searchText.isEmpty { return source }
         let query = searchText
         return source.filter { track in
-            track.title.localizedCaseInsensitiveContains(query) ||
-            (track.artist?.name ?? "").localizedCaseInsensitiveContains(query) ||
-            (track.album?.name ?? "").localizedCaseInsensitiveContains(query)
+            track.title.searchContains(query) ||
+            (track.artist?.name ?? "").searchContains(query) ||
+            (track.album?.name ?? "").searchContains(query)
         }
     }
 
@@ -28,8 +30,8 @@ struct ListenNowView: View {
         if searchText.isEmpty { return albums }
         let query = searchText
         return albums.filter { album in
-            album.name.localizedCaseInsensitiveContains(query) ||
-            (album.artistName ?? "").localizedCaseInsensitiveContains(query)
+            album.name.searchContains(query) ||
+            (album.artistName ?? "").searchContains(query)
         }
     }
 
@@ -83,13 +85,12 @@ struct ListenNowView: View {
                                               : Color.clear)
                                 )
                                 .contentShape(Rectangle())
-                                .onTapGesture {
+                                .onClicks(single: {
                                     selectedTrackID = track.persistentModelID
                                     selectedAlbumID = nil
-                                }
-                                .onDoubleClick {
+                                }, double: {
                                     player.playTrack(track, queue: displayedTracks, startingAt: index)
-                                }
+                                })
                                 .task {
                                     guard track.artworkData == nil, let album = track.album, album.artworkData == nil else { return }
                                     await artworkService.fetchAlbumArtwork(for: album, context: modelContext)
@@ -131,13 +132,12 @@ struct ListenNowView: View {
                                               : Color.clear)
                                 )
                                 .contentShape(Rectangle())
-                                .onTapGesture {
+                                .onClicks(single: {
                                     selectedAlbumID = album.persistentModelID
                                     selectedTrackID = nil
-                                }
-                                .onDoubleClick {
+                                }, double: {
                                     navigationPath.wrappedValue.append(album)
-                                }
+                                })
                                 .task {
                                     guard album.artworkData == nil else { return }
                                     await artworkService.fetchAlbumArtwork(for: album, context: modelContext)
@@ -178,9 +178,12 @@ struct ListenNowView: View {
                     }
                 }
             }
-            .padding(.bottom, 80)
+            .padding(.bottom, barHeight + 20)
         }
-        .searchable(text: $searchText, prompt: "Search...")
+        .searchable(text: $searchText, isPresented: $isSearchPresented, prompt: "Search...")
+        .onReceive(NotificationCenter.default.publisher(for: .focusSearch)) { _ in
+            isSearchPresented = true
+        }
     }
 
     private func removeTrack(_ track: Track) {

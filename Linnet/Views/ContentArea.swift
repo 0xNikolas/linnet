@@ -1,8 +1,10 @@
 import SwiftUI
+import SwiftData
 
 struct ContentArea: View {
     let tab: NavigationTab
     let sidebarItem: SidebarItem?
+    @Binding var highlightedTrackID: PersistentIdentifier?
 
     var body: some View {
         Group {
@@ -18,7 +20,7 @@ struct ContentArea: View {
                     case .artists:
                         ArtistListView()
                     case .songs:
-                        SongsListView()
+                        SongsGroupingView(highlightedTrackID: $highlightedTrackID)
                     case .folders:
                         FolderBrowserView()
                     case .recentlyAdded:

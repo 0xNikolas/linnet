@@ -14,6 +14,13 @@ public final class Track {
     public var year: Int?
     public var artworkData: Data?
 
+    // Audio properties
+    public var bitrate: Int?
+    public var sampleRate: Int?
+    public var channels: Int?
+    public var codec: String?
+    public var fileSize: Int64?
+
     // AI-generated metadata
     public var mood: String?
     public var bpm: Double?

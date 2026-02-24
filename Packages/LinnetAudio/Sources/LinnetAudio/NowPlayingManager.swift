@@ -1,8 +1,7 @@
 import MediaPlayer
 import AppKit
 
-@MainActor
-public final class NowPlayingManager {
+public final class NowPlayingManager: Sendable {
     public static let shared = NowPlayingManager()
 
     private init() {}
@@ -12,6 +11,7 @@ public final class NowPlayingManager {
             MPMediaItemPropertyTitle: title,
             MPMediaItemPropertyPlaybackDuration: duration,
             MPNowPlayingInfoPropertyElapsedPlaybackTime: currentTime,
+            MPNowPlayingInfoPropertyPlaybackRate: 1.0,
         ]
         if let artist { info[MPMediaItemPropertyArtist] = artist }
         if let album { info[MPMediaItemPropertyAlbumTitle] = album }
@@ -22,16 +22,22 @@ public final class NowPlayingManager {
         MPNowPlayingInfoCenter.default().nowPlayingInfo = info
     }
 
+    public func setPlaybackState(_ playing: Bool) {
+        MPNowPlayingInfoCenter.default().playbackState = playing ? .playing : .paused
+    }
+
     public func setupRemoteCommands(
-        onPlay: @escaping () -> Void,
-        onPause: @escaping () -> Void,
-        onNext: @escaping () -> Void,
-        onPrevious: @escaping () -> Void,
-        onSeek: @escaping (Double) -> Void
+        onPlay: @escaping @Sendable () -> Void,
+        onPause: @escaping @Sendable () -> Void,
+        onTogglePlayPause: @escaping @Sendable () -> Void,
+        onNext: @escaping @Sendable () -> Void,
+        onPrevious: @escaping @Sendable () -> Void,
+        onSeek: @escaping @Sendable (Double) -> Void
     ) {
         let center = MPRemoteCommandCenter.shared()
         center.playCommand.addTarget { _ in onPlay(); return .success }
         center.pauseCommand.addTarget { _ in onPause(); return .success }
+        center.togglePlayPauseCommand.addTarget { _ in onTogglePlayPause(); return .success }
         center.nextTrackCommand.addTarget { _ in onNext(); return .success }
         center.previousTrackCommand.addTarget { _ in onPrevious(); return .success }
         center.changePlaybackPositionCommand.addTarget { event in

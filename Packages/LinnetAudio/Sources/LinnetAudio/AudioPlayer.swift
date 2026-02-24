@@ -1,83 +1,148 @@
 import AVFoundation
-import Combine
 
-public actor AudioPlayer {
-    private var engine: AVAudioEngine
-    private var playerNode: AVAudioPlayerNode
-    private var eqNode: AVAudioUnitEQ
-    private var audioFile: AVAudioFile?
+public final class AudioPlayer: @unchecked Sendable {
+    private let engine: AVAudioEngine
+    private let playerNode: AVAudioPlayerNode
+    private let eqNode: AVAudioUnitEQ
+    public let equalizer: Equalizer
 
-    public private(set) var state: PlaybackState = .stopped
+    private var currentFile: AVAudioFile?
+    private var _duration: Double = 0
+    private var _volume: Float = 0.7
+    private var sampleRate: Double = 44100
+    private var scheduledStartFrame: AVAudioFramePosition = 0
+
+    public init() {
+        engine = AVAudioEngine()
+        playerNode = AVAudioPlayerNode()
+        eqNode = AVAudioUnitEQ(numberOfBands: Equalizer.bandCount)
+        equalizer = Equalizer()
+
+        engine.attach(playerNode)
+        engine.attach(eqNode)
+
+        // Initial connection with default format; reconnected per file in load()
+        let mainMixer = engine.mainMixerNode
+        let format = mainMixer.outputFormat(forBus: 0)
+        engine.connect(playerNode, to: eqNode, format: format)
+        engine.connect(eqNode, to: mainMixer, format: format)
+
+        mainMixer.outputVolume = _volume
+
+        // Bind equalizer to the AVAudioUnitEQ node
+        equalizer.bind(to: eqNode)
+    }
+
+    // MARK: - Public API
+
     public var currentTime: Double {
         guard let nodeTime = playerNode.lastRenderTime,
               let playerTime = playerNode.playerTime(forNodeTime: nodeTime) else {
             return 0
         }
-        return Double(playerTime.sampleTime) / playerTime.sampleRate
-    }
-    public private(set) var duration: Double = 0
-
-    public init() {
-        self.engine = AVAudioEngine()
-        self.playerNode = AVAudioPlayerNode()
-        self.eqNode = AVAudioUnitEQ(numberOfBands: 10)
-
-        engine.attach(playerNode)
-        engine.attach(eqNode)
-        engine.connect(playerNode, to: eqNode, format: nil)
-        engine.connect(eqNode, to: engine.mainMixerNode, format: nil)
+        let frames = scheduledStartFrame + playerTime.sampleTime
+        let time = Double(frames) / sampleRate
+        return time.isFinite && time >= 0 ? min(time, _duration) : 0
     }
 
-    public func load(url: URL) throws {
-        state = .loading
-        stop()
-
-        let file = try AVAudioFile(forReading: url)
-        self.audioFile = file
-        self.duration = Double(file.length) / file.processingFormat.sampleRate
-
-        playerNode.scheduleFile(file, at: nil)
-        state = .stopped
+    public var duration: Double {
+        return _duration
     }
 
-    public func play() throws {
-        if !engine.isRunning {
+    public func load(url: URL) async throws {
+        // Stop current playback
+        playerNode.stop()
+        if engine.isRunning {
+            engine.stop()
+        }
+
+        let file: AVAudioFile
+        do {
+            file = try AVAudioFile(forReading: url)
+        } catch {
+            throw NSError(
+                domain: "AudioPlayer", code: -1,
+                userInfo: [NSLocalizedDescriptionKey: "Cannot open file: \(url.lastPathComponent) — \(error.localizedDescription)"]
+            )
+        }
+
+        currentFile = file
+        sampleRate = file.processingFormat.sampleRate
+        _duration = Double(file.length) / sampleRate
+        scheduledStartFrame = 0
+
+        // Reconnect nodes with the file's processing format
+        let format = file.processingFormat
+        engine.disconnectNodeOutput(playerNode)
+        engine.disconnectNodeOutput(eqNode)
+        engine.connect(playerNode, to: eqNode, format: format)
+        engine.connect(eqNode, to: engine.mainMixerNode, format: format)
+
+        // Schedule the file
+        playerNode.scheduleFile(file, at: nil, completionHandler: nil)
+
+        // Start the engine
+        engine.prepare()
+        do {
             try engine.start()
+        } catch {
+            throw NSError(
+                domain: "AudioPlayer", code: -3,
+                userInfo: [NSLocalizedDescriptionKey: "Audio engine failed to start: \(error.localizedDescription)"]
+            )
+        }
+    }
+
+    public func play() {
+        if !engine.isRunning {
+            try? engine.start()
         }
         playerNode.play()
-        state = .playing
     }
 
     public func pause() {
         playerNode.pause()
-        state = .paused
     }
 
     public func stop() {
         playerNode.stop()
-        engine.stop()
-        state = .stopped
+        scheduledStartFrame = 0
+        // Re-schedule from start if we have a file
+        if let file = currentFile {
+            file.framePosition = 0
+            playerNode.scheduleFile(file, at: nil, completionHandler: nil)
+        }
     }
 
-    public func seek(to time: Double) throws {
-        guard let file = audioFile else { return }
-        let sampleRate = file.processingFormat.sampleRate
-        let targetFrame = AVAudioFramePosition(time * sampleRate)
-        let remainingFrames = AVAudioFrameCount(file.length - targetFrame)
+    public func seek(to time: Double) {
+        guard let file = currentFile else { return }
 
+        let wasPlaying = playerNode.isPlaying
         playerNode.stop()
-        playerNode.scheduleSegment(file, startingFrame: targetFrame, frameCount: remainingFrames, at: nil)
-        if state == .playing {
+
+        let targetFrame = AVAudioFramePosition(time * sampleRate)
+        let clampedFrame = max(0, min(targetFrame, file.length))
+
+        file.framePosition = clampedFrame
+        let remainingFrames = AVAudioFrameCount(file.length - clampedFrame)
+
+        guard remainingFrames > 0 else { return }
+
+        scheduledStartFrame = clampedFrame
+        playerNode.scheduleSegment(file, startingFrame: clampedFrame, frameCount: remainingFrames, at: nil, completionHandler: nil)
+
+        if wasPlaying {
             playerNode.play()
         }
     }
 
     public func setVolume(_ vol: Float) {
+        _volume = vol
         engine.mainMixerNode.outputVolume = vol
     }
 
     public var volume: Float {
-        get { engine.mainMixerNode.outputVolume }
-        set { engine.mainMixerNode.outputVolume = newValue }
+        get { _volume }
+        set { setVolume(newValue) }
     }
 }

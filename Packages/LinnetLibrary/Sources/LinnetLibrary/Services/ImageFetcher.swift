@@ -2,6 +2,7 @@ import Foundation
 
 public struct ImageFetcher: Sendable {
     private static let userAgent = "Linnet/1.0 (https://github.com/nicklama/linnet)"
+    private static let requestTimeout: TimeInterval = 20
 
     public init() {}
 
@@ -13,6 +14,7 @@ public struct ImageFetcher: Sendable {
 
         var request = URLRequest(url: url)
         request.setValue(Self.userAgent, forHTTPHeaderField: "User-Agent")
+        request.timeoutInterval = Self.requestTimeout
 
         do {
             let (data, response) = try await URLSession.shared.data(for: request)
@@ -22,6 +24,7 @@ public struct ImageFetcher: Sendable {
             }
             return data
         } catch {
+            print("[ImageFetcher] Cover Art Archive error for \(releaseGroupMBID): \(error.localizedDescription)")
             return nil
         }
     }
@@ -47,7 +50,6 @@ public struct ImageFetcher: Sendable {
     // MARK: - Private Helpers
 
     private func resolveWikidataToWikipediaTitle(url: URL) async -> String? {
-        // Extract entity ID (e.g., Q123) from URL like https://www.wikidata.org/wiki/Q123
         guard let entityID = url.pathComponents.last, entityID.hasPrefix("Q") else {
             return nil
         }
@@ -57,12 +59,14 @@ public struct ImageFetcher: Sendable {
 
         var request = URLRequest(url: url)
         request.setValue(Self.userAgent, forHTTPHeaderField: "User-Agent")
+        request.timeoutInterval = Self.requestTimeout
 
         do {
             let (data, _) = try await URLSession.shared.data(for: request)
             let response = try JSONDecoder().decode(WikidataResponse.self, from: data)
             return response.entities[entityID]?.sitelinks?["enwiki"]?.title
         } catch {
+            print("[ImageFetcher] Wikidata resolve error for \(entityID): \(error.localizedDescription)")
             return nil
         }
     }
@@ -77,6 +81,7 @@ public struct ImageFetcher: Sendable {
 
         var request = URLRequest(url: url)
         request.setValue(Self.userAgent, forHTTPHeaderField: "User-Agent")
+        request.timeoutInterval = Self.requestTimeout
 
         do {
             let (data, _) = try await URLSession.shared.data(for: request)
@@ -89,6 +94,7 @@ public struct ImageFetcher: Sendable {
 
             var imageRequest = URLRequest(url: imageURL)
             imageRequest.setValue(Self.userAgent, forHTTPHeaderField: "User-Agent")
+            imageRequest.timeoutInterval = Self.requestTimeout
 
             let (imageData, imageResponse) = try await URLSession.shared.data(for: imageRequest)
             guard let httpResponse = imageResponse as? HTTPURLResponse,
@@ -97,6 +103,7 @@ public struct ImageFetcher: Sendable {
             }
             return imageData
         } catch {
+            print("[ImageFetcher] Wikipedia image error for \(title): \(error.localizedDescription)")
             return nil
         }
     }

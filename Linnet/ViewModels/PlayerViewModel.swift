@@ -16,9 +16,36 @@ public final class PlayerViewModel {
     var duration: Double = 0
     var errorMessage: String?
     var volume: Float = 0.7 {
-        didSet { Task { await audioPlayer.setVolume(volume) } }
+        didSet { audioPlayer.setVolume(volume) }
     }
     var isPlaying: Bool { state == .playing }
+
+    // MARK: - Equalizer
+
+    var eqBands: [Equalizer.Band] = []
+    var eqEnabled: Bool = false
+    var eqPreset: Equalizer.Preset = .flat
+
+    func setEQEnabled(_ enabled: Bool) {
+        eqEnabled = enabled
+        audioPlayer.equalizer.isEnabled = enabled
+    }
+
+    func setEQPreset(_ preset: Equalizer.Preset) {
+        eqPreset = preset
+        audioPlayer.equalizer.applyPreset(preset)
+        eqBands = audioPlayer.equalizer.bands
+    }
+
+    func setEQBands(_ bands: [Equalizer.Band]) {
+        eqBands = bands
+        audioPlayer.equalizer.bands = bands
+    }
+
+    func setEQGain(_ gain: Float, forBandAt index: Int) {
+        audioPlayer.equalizer.setGain(gain, forBandAt: index)
+        eqBands = audioPlayer.equalizer.bands
+    }
 
     var currentQueueTrack: Track? {
         guard queue.currentIndex < queuedTracks.count else { return nil }
@@ -48,6 +75,7 @@ public final class PlayerViewModel {
     private var modelContext: ModelContext?
 
     init() {
+        eqBands = audioPlayer.equalizer.bands
         setupRemoteCommands()
     }
 
@@ -56,33 +84,25 @@ public final class PlayerViewModel {
     }
 
     func play() {
-        Task {
-            do {
-                try await audioPlayer.play()
-                state = .playing
-                startTimeUpdates()
-            } catch {
-                state = .stopped
-                errorMessage = "Playback error: \(error.localizedDescription)"
-            }
-        }
+        audioPlayer.play()
+        state = .playing
+        nowPlayingManager.setPlaybackState(true)
+        startTimeUpdates()
     }
 
     func pause() {
-        Task {
-            await audioPlayer.pause()
-            state = .paused
-            stopTimeUpdates()
-        }
+        audioPlayer.pause()
+        state = .paused
+        nowPlayingManager.setPlaybackState(false)
+        stopTimeUpdates()
     }
 
     func stop() {
-        Task {
-            await audioPlayer.stop()
-            state = .stopped
-            currentTime = 0
-            stopTimeUpdates()
-        }
+        audioPlayer.stop()
+        state = .stopped
+        currentTime = 0
+        nowPlayingManager.setPlaybackState(false)
+        stopTimeUpdates()
     }
 
     func togglePlayPause() {
@@ -116,15 +136,9 @@ public final class PlayerViewModel {
     }
 
     func seek(to time: Double) {
-        Task {
-            do {
-                try await audioPlayer.seek(to: time)
-                currentTime = time
-                updateNowPlayingInfo()
-            } catch {
-                errorMessage = "Seek error: \(error.localizedDescription)"
-            }
-        }
+        audioPlayer.seek(to: time)
+        currentTime = time
+        updateNowPlayingInfo()
     }
 
     func playTracks(_ filePaths: [String], startingAt index: Int = 0) {
@@ -153,6 +167,16 @@ public final class PlayerViewModel {
         }
     }
 
+    func addNext(_ track: Track) {
+        queue.playNext(track.filePath)
+        queuedTracks.insert(track, at: min(queue.currentIndex + 1, queuedTracks.count))
+    }
+
+    func addLater(_ track: Track) {
+        queue.playLater(track.filePath)
+        queuedTracks.append(track)
+    }
+
     func clearQueue() {
         let currentTrack = currentQueueTrack
         queue.clear()
@@ -163,11 +187,13 @@ public final class PlayerViewModel {
         Task {
             do {
                 let url = URL(filePath: filePath)
+                restoreFolderAccess(for: filePath)
                 try await audioPlayer.load(url: url)
-                try await audioPlayer.play()
-                state = .playing
-                duration = await audioPlayer.duration
+                duration = audioPlayer.duration
                 currentTime = 0
+                audioPlayer.play()
+                state = .playing
+                nowPlayingManager.setPlaybackState(true)
                 if currentTrackTitle == "No Track Playing" {
                     currentTrackTitle = url.deletingPathExtension().lastPathComponent
                 }
@@ -176,7 +202,35 @@ public final class PlayerViewModel {
                 startTimeUpdates()
             } catch {
                 state = .stopped
-                errorMessage = "Could not play file: \(error.localizedDescription)"
+                duration = 0
+                errorMessage = error.localizedDescription
+                print("[Linnet] Playback error for \(filePath): \(error)")
+            }
+        }
+    }
+
+    private var activeSecurityScopedURLs: [String: URL] = [:]
+
+    private func restoreFolderAccess(for filePath: String) {
+        guard let context = modelContext else { return }
+        let descriptor = FetchDescriptor<WatchedFolder>()
+        guard let folders = try? context.fetch(descriptor) else { return }
+
+        for folder in folders {
+            if filePath.hasPrefix(folder.path), activeSecurityScopedURLs[folder.path] == nil {
+                if let bookmarkData = folder.bookmarkData {
+                    var isStale = false
+                    if let url = try? URL(resolvingBookmarkData: bookmarkData, options: .withSecurityScope, relativeTo: nil, bookmarkDataIsStale: &isStale) {
+                        if url.startAccessingSecurityScopedResource() {
+                            activeSecurityScopedURLs[folder.path] = url
+                        }
+                        if isStale {
+                            folder.bookmarkData = try? url.bookmarkData(options: .withSecurityScope, includingResourceValuesForKeys: nil, relativeTo: nil)
+                            try? context.save()
+                        }
+                    }
+                }
+                break
             }
         }
     }
@@ -198,7 +252,7 @@ public final class PlayerViewModel {
         timeUpdateTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
                 guard let self, self.isPlaying else { return }
-                self.currentTime = await self.audioPlayer.currentTime
+                self.currentTime = self.audioPlayer.currentTime
                 if self.currentTime >= self.duration && self.duration > 0 {
                     self.next()
                 }
@@ -226,11 +280,12 @@ public final class PlayerViewModel {
 
     private func setupRemoteCommands() {
         nowPlayingManager.setupRemoteCommands(
-            onPlay: { [weak self] in self?.play() },
-            onPause: { [weak self] in self?.pause() },
-            onNext: { [weak self] in self?.next() },
-            onPrevious: { [weak self] in self?.previous() },
-            onSeek: { [weak self] in self?.seek(to: $0) }
+            onPlay: { [weak self] in Task { @MainActor in self?.play() } },
+            onPause: { [weak self] in Task { @MainActor in self?.pause() } },
+            onTogglePlayPause: { [weak self] in Task { @MainActor in self?.togglePlayPause() } },
+            onNext: { [weak self] in Task { @MainActor in self?.next() } },
+            onPrevious: { [weak self] in Task { @MainActor in self?.previous() } },
+            onSeek: { [weak self] time in Task { @MainActor in self?.seek(to: time) } }
         )
     }
 

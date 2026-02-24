@@ -1,12 +1,17 @@
 import SwiftUI
 
-enum SidebarItem: Hashable {
+enum SidebarItem: Hashable, Codable {
     case recentlyAdded
     case artists
     case albums
     case songs
     case folders
     case playlist(String)
+
+    /// All library items in default order.
+    static let allLibraryItems: [SidebarItem] = [
+        .songs, .recentlyAdded, .artists, .albums, .folders
+    ]
 
     var label: String {
         switch self {

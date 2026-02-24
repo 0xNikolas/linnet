@@ -9,14 +9,16 @@ struct AlbumGridView: View {
     @Environment(\.navigationPath) private var navigationPath
     @State private var selectedAlbumID: PersistentIdentifier?
     @State private var searchText = ""
+    @State private var isSearchPresented = false
+    @AppStorage("nowPlayingBarHeight") private var barHeight: Double = 56
     private let columns = [GridItem(.adaptive(minimum: 160, maximum: 200), spacing: 20)]
 
     private var filteredAlbums: [Album] {
         if searchText.isEmpty { return albums }
         let query = searchText
         return albums.filter { album in
-            album.name.localizedCaseInsensitiveContains(query) ||
-            (album.artistName ?? "").localizedCaseInsensitiveContains(query)
+            album.name.searchContains(query) ||
+            (album.artistName ?? "").searchContains(query)
         }
     }
 
@@ -44,11 +46,14 @@ struct AlbumGridView: View {
                     }
                 }
                 .padding(20)
-                .padding(.bottom, 60)
+                .padding(.bottom, barHeight + 20)
                 .animation(.default, value: filteredAlbums.count)
             }
         }
-        .searchable(text: $searchText, prompt: "Search albums...")
+        .searchable(text: $searchText, isPresented: $isSearchPresented, prompt: "Search albums...")
+        .onReceive(NotificationCenter.default.publisher(for: .focusSearch)) { _ in
+            isSearchPresented = true
+        }
     }
 
     private func removeAlbum(_ album: Album) {
@@ -90,8 +95,7 @@ private struct AlbumGridItem: View {
                 .fill(isSelected ? Color.accentColor.opacity(0.15) : Color.clear)
         )
         .contentShape(Rectangle())
-        .onTapGesture { onSelect() }
-        .onDoubleClick { onNavigate() }
+        .onClicks(single: { onSelect() }, double: { onNavigate() })
         .task {
             guard album.artworkData == nil else { return }
             isFetching = true
@@ -102,7 +106,7 @@ private struct AlbumGridItem: View {
             Button("Find Artwork") {
                 Task {
                     isFetching = true
-                    await artworkService.fetchAlbumArtwork(for: album, context: modelContext)
+                    await artworkService.fetchAlbumArtwork(for: album, context: modelContext, force: true)
                     isFetching = false
                 }
             }

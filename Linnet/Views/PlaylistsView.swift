@@ -5,6 +5,15 @@ import LinnetLibrary
 struct PlaylistsView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \Playlist.createdAt) private var playlists: [Playlist]
+    @State private var searchText = ""
+    @State private var isSearchPresented = false
+    @AppStorage("nowPlayingBarHeight") private var barHeight: Double = 56
+
+    private var filteredPlaylists: [Playlist] {
+        if searchText.isEmpty { return playlists }
+        let query = searchText
+        return playlists.filter { $0.name.searchContains(query) }
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -19,11 +28,17 @@ struct PlaylistsView: View {
             }
             .padding(20)
 
-            if playlists.isEmpty {
-                ContentUnavailableView("No Playlists", systemImage: "music.note.list", description: Text("Create a playlist to get started."))
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            if filteredPlaylists.isEmpty {
+                ContentUnavailableView(
+                    searchText.isEmpty ? "No Playlists" : "No Results",
+                    systemImage: searchText.isEmpty ? "music.note.list" : "magnifyingglass",
+                    description: Text(searchText.isEmpty
+                        ? "Create a playlist to get started."
+                        : "No playlists matching \"\(searchText)\"")
+                )
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                List(playlists) { playlist in
+                List(filteredPlaylists) { playlist in
                     HStack(spacing: 12) {
                         RoundedRectangle(cornerRadius: 4)
                             .fill(.quaternary)
@@ -43,7 +58,12 @@ struct PlaylistsView: View {
                     }
                     .padding(.vertical, 4)
                 }
+                .contentMargins(.bottom, barHeight + 20, for: .scrollContent)
             }
+        }
+        .searchable(text: $searchText, isPresented: $isSearchPresented, prompt: "Search playlists...")
+        .onReceive(NotificationCenter.default.publisher(for: .focusSearch)) { _ in
+            isSearchPresented = true
         }
     }
 
