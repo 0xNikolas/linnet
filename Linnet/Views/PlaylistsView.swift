@@ -7,7 +7,6 @@ struct PlaylistsView: View {
     @Query(sort: \Playlist.createdAt) private var playlists: [Playlist]
     @State private var searchText = ""
     @State private var isSearchPresented = false
-    @AppStorage("nowPlayingBarHeight") private var barHeight: Double = 56
 
     private var filteredPlaylists: [Playlist] {
         if searchText.isEmpty { return playlists }
@@ -58,7 +57,6 @@ struct PlaylistsView: View {
                     }
                     .padding(.vertical, 4)
                 }
-                .contentMargins(.bottom, barHeight + 20, for: .scrollContent)
             }
         }
         .searchable(text: $searchText, isPresented: $isSearchPresented, prompt: "Search playlists...")

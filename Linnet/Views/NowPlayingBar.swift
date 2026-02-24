@@ -12,7 +12,9 @@ struct NowPlayingBar: View {
     @Environment(PlayerViewModel.self) private var player
     @State private var showQueue = false
     @State private var showEqualizer = false
-    @AppStorage("nowPlayingBarHeight") private var barHeight: Double = 56
+    @AppStorage("nowPlayingBarHeight") private var storedBarHeight: Double = 56
+    @State private var liveBarHeight: Double?
+    private var barHeight: Double { liveBarHeight ?? storedBarHeight }
 
     var body: some View {
         @Bindable var player = player
@@ -27,7 +29,11 @@ struct NowPlayingBar: View {
                 .gesture(
                     DragGesture()
                         .onChanged { value in
-                            barHeight = max(48, min(120, barHeight - value.translation.height))
+                            liveBarHeight = max(48, min(120, barHeight - value.translation.height))
+                        }
+                        .onEnded { _ in
+                            storedBarHeight = barHeight
+                            liveBarHeight = nil
                         }
                 )
 

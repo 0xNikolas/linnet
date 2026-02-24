@@ -8,7 +8,6 @@ struct FolderBrowserView: View {
     @State private var libraryVM = LibraryViewModel()
     @State private var searchText = ""
     @State private var isSearchPresented = false
-    @AppStorage("nowPlayingBarHeight") private var barHeight: Double = 56
 
     private var filteredFolders: [WatchedFolder] {
         if searchText.isEmpty { return watchedFolders }
@@ -66,7 +65,6 @@ struct FolderBrowserView: View {
                             }
                     }
                 }
-                .contentMargins(.bottom, barHeight + 20, for: .scrollContent)
             }
         }
         .searchable(text: $searchText, isPresented: $isSearchPresented, prompt: "Search folders...")

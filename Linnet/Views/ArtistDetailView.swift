@@ -12,7 +12,6 @@ struct ArtistDetailView: View {
     @State private var selectedAlbumID: PersistentIdentifier?
     @State private var selectedTrackID: PersistentIdentifier?
     @State private var isFetchingArtwork = false
-    @AppStorage("nowPlayingBarHeight") private var barHeight: Double = 56
 
     private var allTracks: [Track] {
         artist.tracks.sorted { lhs, rhs in
@@ -156,7 +155,6 @@ struct ArtistDetailView: View {
                     .padding(.horizontal, 20)
                 }
             }
-            .padding(.bottom, barHeight + 20)
         }
         .onReceive(NotificationCenter.default.publisher(for: .highlightTrackInDetail)) { notification in
             guard let trackID = notification.userInfo?["trackID"] as? PersistentIdentifier else { return }

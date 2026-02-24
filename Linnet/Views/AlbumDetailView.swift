@@ -16,7 +16,6 @@ struct AlbumDetailView: View {
     @Environment(\.modelContext) private var modelContext
     @State private var isFetchingArtwork = false
     @State private var showEditSheet = false
-    @AppStorage("nowPlayingBarHeight") private var barHeight: Double = 56
 
     private var sortedTracks: [Track] {
         album.tracks.sorted {
@@ -178,7 +177,6 @@ private struct AlbumTrackListView: View {
     let onRemove: (Set<PersistentIdentifier>) -> Void
 
     @State private var selectedTrackIDs: Set<PersistentIdentifier> = []
-    @AppStorage("nowPlayingBarHeight") private var barHeight: Double = 56
 
     var body: some View {
         List(sortedTracks, selection: $selectedTrackIDs) { track in
@@ -199,7 +197,6 @@ private struct AlbumTrackListView: View {
             }
         }
         .listStyle(.inset)
-        .contentMargins(.bottom, barHeight + 20, for: .scrollContent)
         .contextMenu(forSelectionType: PersistentIdentifier.self) { ids in
             contextMenuContent(for: ids)
         } primaryAction: { ids in

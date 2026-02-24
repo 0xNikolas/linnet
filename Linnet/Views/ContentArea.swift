@@ -5,6 +5,7 @@ struct ContentArea: View {
     let tab: NavigationTab
     let sidebarItem: SidebarItem?
     @Binding var highlightedTrackID: PersistentIdentifier?
+    @AppStorage("nowPlayingBarHeight") private var barHeight: Double = 56
 
     var body: some View {
         Group {
@@ -42,5 +43,8 @@ struct ContentArea: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            Color.clear.frame(height: barHeight + 4)
+        }
     }
 }

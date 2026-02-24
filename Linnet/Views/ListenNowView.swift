@@ -13,8 +13,6 @@ struct ListenNowView: View {
     @State private var selectedTrackID: PersistentIdentifier?
     @State private var selectedAlbumID: PersistentIdentifier?
     @Environment(\.navigationPath) private var navigationPath
-    @AppStorage("nowPlayingBarHeight") private var barHeight: Double = 56
-
     private var filteredRecentTracks: [Track] {
         let source = Array(recentTracks.prefix(20))
         if searchText.isEmpty { return source }
@@ -174,7 +172,7 @@ struct ListenNowView: View {
                     }
                 }
             }
-            .padding(.bottom, barHeight + 20)
+            .padding(.bottom, 20)
         }
         .searchable(text: $searchText, isPresented: $isSearchPresented, prompt: "Search...")
         .onReceive(NotificationCenter.default.publisher(for: .focusSearch)) { _ in

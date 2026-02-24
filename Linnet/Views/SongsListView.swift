@@ -91,7 +91,6 @@ private struct SongsTableView: View {
 
     @State private var selectedTrackIDs: Set<PersistentIdentifier> = []
     @State private var sortOrder = [KeyPathComparator(\Track.title)]
-    @AppStorage("nowPlayingBarHeight") private var barHeight: Double = 56
     @State private var sortedTracks: [Track] = []
     @SceneStorage("SongsTableConfig") private var columnCustomization: TableColumnCustomization<Track>
 
@@ -105,7 +104,6 @@ private struct SongsTableView: View {
         ScrollViewReader { proxy in
             songsTable
                 .tableStyle(.inset)
-                .contentMargins(.bottom, barHeight + 20, for: .scrollContent)
                 .contextMenu(forSelectionType: PersistentIdentifier.self) { ids in
                     contextMenuContent(for: ids)
                 } primaryAction: { ids in

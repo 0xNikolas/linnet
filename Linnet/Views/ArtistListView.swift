@@ -10,8 +10,6 @@ struct ArtistListView: View {
     @State private var selectedArtistID: PersistentIdentifier?
     @State private var searchText = ""
     @State private var isSearchPresented = false
-    @AppStorage("nowPlayingBarHeight") private var barHeight: Double = 56
-
     private var filteredArtists: [Artist] {
         if searchText.isEmpty { return artists }
         let query = searchText
@@ -36,7 +34,6 @@ struct ArtistListView: View {
                 }
             }
         }
-        .contentMargins(.bottom, barHeight + 20, for: .scrollContent)
         .searchable(text: $searchText, isPresented: $isSearchPresented, prompt: "Search artists...")
         .onReceive(NotificationCenter.default.publisher(for: .focusSearch)) { _ in
             isSearchPresented = true

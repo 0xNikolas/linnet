@@ -23,8 +23,10 @@ struct ClickOverlay: NSViewRepresentable {
         var onSingleClick: (() -> Void)?
         var onDoubleClick: (() -> Void)?
 
+        override var acceptsFirstResponder: Bool { true }
+
         override func mouseDown(with event: NSEvent) {
-            super.mouseDown(with: event)
+            // Don't call super — prevents ScrollView from consuming the event
             if event.clickCount == 2 {
                 onDoubleClick?()
             } else if event.clickCount == 1 {

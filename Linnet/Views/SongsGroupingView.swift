@@ -137,7 +137,6 @@ private struct GroupedSongsView: View {
     @Environment(PlayerViewModel.self) private var player
     @Environment(\.modelContext) private var modelContext
     @State private var selectedTrackIDs: Set<PersistentIdentifier> = []
-    @AppStorage("nowPlayingBarHeight") private var barHeight: Double = 56
 
     /// Flattened list of all tracks across sections, used for building the playback queue.
     private var allTracks: [Track] {
@@ -166,7 +165,6 @@ private struct GroupedSongsView: View {
             }
             .listStyle(.inset)
             .environment(\.defaultMinListRowHeight, 28)
-            .contentMargins(.bottom, barHeight + 20, for: .scrollContent)
             .contextMenu(forSelectionType: PersistentIdentifier.self) { ids in
                 contextMenuContent(for: ids)
             } primaryAction: { ids in

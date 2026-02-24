@@ -11,7 +11,6 @@ struct AlbumGridView: View {
     @State private var selectedAlbumID: PersistentIdentifier?
     @State private var searchText = ""
     @State private var isSearchPresented = false
-    @AppStorage("nowPlayingBarHeight") private var barHeight: Double = 56
     private let columns = [GridItem(.adaptive(minimum: 160, maximum: 200), spacing: 20)]
 
     private var filteredAlbums: [Album] {
@@ -47,7 +46,6 @@ struct AlbumGridView: View {
                     }
                 }
                 .padding(20)
-                .padding(.bottom, barHeight + 20)
                 .animation(.default, value: filteredAlbums.count)
             }
         }
