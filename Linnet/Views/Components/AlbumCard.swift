@@ -4,6 +4,7 @@ struct AlbumCard: View {
     let name: String
     let artist: String
     let artwork: NSImage?
+    var isLoading: Bool = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -15,6 +16,9 @@ struct AlbumCard: View {
                         Image(nsImage: artwork)
                             .resizable()
                             .scaledToFill()
+                    } else if isLoading {
+                        ProgressView()
+                            .scaleEffect(0.8)
                     } else {
                         Image(systemName: "music.note")
                             .font(.system(size: 30))

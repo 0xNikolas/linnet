@@ -5,7 +5,6 @@ import LinnetLibrary
 struct ArtistListView: View {
     @Query(sort: \Artist.name) private var artists: [Artist]
     @Environment(\.modelContext) private var modelContext
-    @Environment(ArtworkService.self) private var artworkService
     @Environment(\.navigationPath) private var navigationPath
     @State private var selectedArtistID: PersistentIdentifier?
     @State private var searchText = ""
@@ -29,47 +28,8 @@ struct ArtistListView: View {
                 .frame(maxWidth: .infinity, minHeight: 300)
             } else {
                 ForEach(filteredArtists) { artist in
-                    HStack(spacing: 12) {
-                        Circle()
-                            .fill(.quaternary)
-                            .frame(width: 40, height: 40)
-                            .overlay {
-                                if let artData = artist.artworkData, let img = NSImage(data: artData) {
-                                    Image(nsImage: img)
-                                        .resizable()
-                                        .scaledToFill()
-                                } else {
-                                    Image(systemName: "music.mic")
-                                        .foregroundStyle(.secondary)
-                                }
-                            }
-                            .clipShape(Circle())
-                            .task {
-                                guard artist.artworkData == nil else { return }
-                                await artworkService.fetchArtistArtwork(for: artist, context: modelContext)
-                            }
-
-                        VStack(alignment: .leading) {
-                            Text(artist.name)
-                                .font(.system(size: 14))
-                            Text("\(artist.albums.count) albums")
-                                .font(.system(size: 12))
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                    .padding(.vertical, 4)
-                    .tag(artist.persistentModelID)
-                    .contextMenu {
-                        Button("Find Artwork") {
-                            Task {
-                                await artworkService.fetchArtistArtwork(for: artist, context: modelContext)
-                            }
-                        }
-                        Divider()
-                        Button("Remove from Library", role: .destructive) {
-                            removeArtist(artist)
-                        }
-                    }
+                    ArtistRow(artist: artist, onRemove: { removeArtist(artist) })
+                        .tag(artist.persistentModelID)
                 }
             }
         }
@@ -94,5 +54,64 @@ struct ArtistListView: View {
         }
         modelContext.delete(artist)
         try? modelContext.save()
+    }
+}
+
+// MARK: - Per-row wrapper with loading state
+
+private struct ArtistRow: View {
+    let artist: Artist
+    let onRemove: () -> Void
+
+    @Environment(ArtworkService.self) private var artworkService
+    @Environment(\.modelContext) private var modelContext
+    @State private var isFetching = false
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Circle()
+                .fill(.quaternary)
+                .frame(width: 40, height: 40)
+                .overlay {
+                    if let artData = artist.artworkData, let img = NSImage(data: artData) {
+                        Image(nsImage: img)
+                            .resizable()
+                            .scaledToFill()
+                    } else if isFetching {
+                        ProgressView()
+                            .scaleEffect(0.6)
+                    } else {
+                        Image(systemName: "music.mic")
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .clipShape(Circle())
+
+            VStack(alignment: .leading) {
+                Text(artist.name)
+                    .font(.system(size: 14))
+                Text("\(artist.albums.count) albums")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(.vertical, 4)
+        .task {
+            guard artist.artworkData == nil else { return }
+            isFetching = true
+            await artworkService.fetchArtistArtwork(for: artist, context: modelContext)
+            isFetching = false
+        }
+        .contextMenu {
+            Button("Find Artwork") {
+                Task {
+                    isFetching = true
+                    await artworkService.fetchArtistArtwork(for: artist, context: modelContext)
+                    isFetching = false
+                }
+            }
+            Divider()
+            Button("Remove from Library", role: .destructive) { onRemove() }
+        }
     }
 }

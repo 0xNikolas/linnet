@@ -34,40 +34,13 @@ struct AlbumGridView: View {
             } else {
                 LazyVGrid(columns: columns, spacing: 20) {
                     ForEach(filteredAlbums) { album in
-                        AlbumCard(
-                            name: album.name,
-                            artist: album.artistName ?? "Unknown Artist",
-                            artwork: album.artworkData.flatMap { NSImage(data: $0) }
+                        AlbumGridItem(
+                            album: album,
+                            isSelected: selectedAlbumID == album.persistentModelID,
+                            onSelect: { selectedAlbumID = album.persistentModelID },
+                            onNavigate: { navigationPath.wrappedValue.append(album) },
+                            onRemove: { removeAlbum(album) }
                         )
-                        .padding(6)
-                        .background(
-                            RoundedRectangle(cornerRadius: 10)
-                                .fill(selectedAlbumID == album.persistentModelID
-                                      ? Color.accentColor.opacity(0.15)
-                                      : Color.clear)
-                        )
-                        .contentShape(Rectangle())
-                        .onTapGesture {
-                            selectedAlbumID = album.persistentModelID
-                        }
-                        .onDoubleClick {
-                            navigationPath.wrappedValue.append(album)
-                        }
-                        .task {
-                            guard album.artworkData == nil else { return }
-                            await artworkService.fetchAlbumArtwork(for: album, context: modelContext)
-                        }
-                        .contextMenu {
-                            Button("Find Artwork") {
-                                Task {
-                                    await artworkService.fetchAlbumArtwork(for: album, context: modelContext)
-                                }
-                            }
-                            Divider()
-                            Button("Remove from Library", role: .destructive) {
-                                removeAlbum(album)
-                            }
-                        }
                     }
                 }
                 .padding(20)
@@ -88,5 +61,53 @@ struct AlbumGridView: View {
             modelContext.delete(artist)
         }
         try? modelContext.save()
+    }
+}
+
+// MARK: - Per-item wrapper with its own loading state
+
+private struct AlbumGridItem: View {
+    let album: Album
+    let isSelected: Bool
+    let onSelect: () -> Void
+    let onNavigate: () -> Void
+    let onRemove: () -> Void
+
+    @Environment(ArtworkService.self) private var artworkService
+    @Environment(\.modelContext) private var modelContext
+    @State private var isFetching = false
+
+    var body: some View {
+        AlbumCard(
+            name: album.name,
+            artist: album.artistName ?? "Unknown Artist",
+            artwork: album.artworkData.flatMap { NSImage(data: $0) },
+            isLoading: isFetching
+        )
+        .padding(6)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(isSelected ? Color.accentColor.opacity(0.15) : Color.clear)
+        )
+        .contentShape(Rectangle())
+        .onTapGesture { onSelect() }
+        .onDoubleClick { onNavigate() }
+        .task {
+            guard album.artworkData == nil else { return }
+            isFetching = true
+            await artworkService.fetchAlbumArtwork(for: album, context: modelContext)
+            isFetching = false
+        }
+        .contextMenu {
+            Button("Find Artwork") {
+                Task {
+                    isFetching = true
+                    await artworkService.fetchAlbumArtwork(for: album, context: modelContext)
+                    isFetching = false
+                }
+            }
+            Divider()
+            Button("Remove from Library", role: .destructive) { onRemove() }
+        }
     }
 }
