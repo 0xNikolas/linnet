@@ -20,6 +20,9 @@ struct LinnetApp: App {
         WindowGroup {
             ContentView()
                 .environment(playerViewModel)
+                .onAppear {
+                    playerViewModel.setModelContext(sharedModelContainer.mainContext)
+                }
         }
         .windowStyle(.titleBar)
         .defaultSize(width: 1100, height: 700)

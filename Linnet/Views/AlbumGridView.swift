@@ -28,8 +28,5 @@ struct AlbumGridView: View {
                 .animation(.default, value: albums.count)
             }
         }
-        .navigationDestination(for: Album.self) { album in
-            AlbumDetailView(album: album)
-        }
     }
 }

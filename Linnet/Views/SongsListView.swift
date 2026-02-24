@@ -32,7 +32,7 @@ struct SongsListView: View {
                             .foregroundStyle(.secondary)
                             .frame(width: 150, alignment: .leading)
 
-                        Text(formatDuration(track.duration))
+                        Text(player.formatTime(track.duration))
                             .font(.system(.body, design: .monospaced))
                             .foregroundStyle(.secondary)
                             .frame(width: 50, alignment: .trailing)
@@ -41,15 +41,14 @@ struct SongsListView: View {
                     .onTapGesture(count: 2) {
                         player.playTrack(track, queue: tracks, startingAt: index)
                     }
+                    .contextMenu {
+                        Button("Play") {
+                            player.playTrack(track, queue: tracks, startingAt: index)
+                        }
+                    }
                 }
             }
             .listStyle(.inset)
         }
-    }
-
-    private func formatDuration(_ seconds: Double) -> String {
-        let mins = Int(seconds) / 60
-        let secs = Int(seconds) % 60
-        return String(format: "%d:%02d", mins, secs)
     }
 }
