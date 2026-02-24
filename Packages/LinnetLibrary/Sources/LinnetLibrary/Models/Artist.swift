@@ -6,6 +6,7 @@ public final class Artist {
     #Unique<Artist>([\.name])
 
     public var name: String
+    public var artworkData: Data?
 
     @Relationship(deleteRule: .nullify, inverse: \Album.artist)
     public var albums: [Album]
