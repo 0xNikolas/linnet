@@ -183,6 +183,18 @@ public final class PlayerViewModel {
         queuedTracks = currentTrack.map { [$0] } ?? []
     }
 
+    func toggleLike() {
+        guard let track = currentQueueTrack else { return }
+        track.likedStatus = track.likedStatus == 1 ? 0 : 1
+        try? modelContext?.save()
+    }
+
+    func toggleDislike() {
+        guard let track = currentQueueTrack else { return }
+        track.likedStatus = track.likedStatus == -1 ? 0 : -1
+        try? modelContext?.save()
+    }
+
     func loadAndPlay(filePath: String) {
         Task {
             do {

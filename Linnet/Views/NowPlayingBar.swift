@@ -98,6 +98,24 @@ struct NowPlayingBar: View {
                 }
                 .frame(width: 160, alignment: .leading)
 
+                HStack(spacing: 8) {
+                    Button(action: { player.toggleDislike() }) {
+                        Image(systemName: player.currentQueueTrack?.likedStatus == -1 ? "hand.thumbsdown.fill" : "hand.thumbsdown")
+                            .font(.system(size: 14))
+                            .foregroundStyle(player.currentQueueTrack?.likedStatus == -1 ? .red : .secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(player.currentQueueTrack == nil)
+
+                    Button(action: { player.toggleLike() }) {
+                        Image(systemName: player.currentQueueTrack?.likedStatus == 1 ? "hand.thumbsup.fill" : "hand.thumbsup")
+                            .font(.system(size: 14))
+                            .foregroundColor(player.currentQueueTrack?.likedStatus == 1 ? .accentColor : .secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(player.currentQueueTrack == nil)
+                }
+
                 Spacer()
 
                 // Playback controls
