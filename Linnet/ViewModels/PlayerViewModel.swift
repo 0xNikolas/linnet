@@ -204,7 +204,7 @@ public final class PlayerViewModel {
                 state = .stopped
                 duration = 0
                 errorMessage = error.localizedDescription
-                print("[Linnet] Playback error for \(filePath): \(error)")
+                Log.player.error("Playback error for \(filePath): \(error)")
             }
         }
     }

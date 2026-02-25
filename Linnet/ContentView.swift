@@ -17,10 +17,12 @@ struct ContentView: View {
             NavigationStack(path: $navigationPath) {
                 ContentArea(tab: selectedTab, sidebarItem: selectedSidebarItem, highlightedTrackID: $highlightedTrackID)
                     .navigationDestination(for: Album.self) { album in
+                        let _ = Log.navigation.debug("Pushing AlbumDetailView: \(album.name)")
                         AlbumDetailView(album: album)
                     }
                     .navigationDestination(for: Artist.self) { artist in
-                        ArtistDetailView(artist: artist)
+                        let _ = Log.navigation.debug("Pushing ArtistDetailView: \(artist.name)")
+                        ArtistDetailView(artist: artist, navigationPath: $navigationPath)
                     }
             }
             .id("\(selectedTab)-\(selectedSidebarItem.map { "\($0)" } ?? "none")")

@@ -1,7 +1,7 @@
 import SwiftUI
 
 private struct NavigationPathKey: EnvironmentKey {
-    static let defaultValue: Binding<NavigationPath> = .constant(NavigationPath())
+    nonisolated(unsafe) static let defaultValue: Binding<NavigationPath> = .constant(NavigationPath())
 }
 
 extension EnvironmentValues {

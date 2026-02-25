@@ -3,17 +3,21 @@ import SwiftData
 import LinnetLibrary
 import UniformTypeIdentifiers
 
+// File-level storage — survives SwiftUI view lifecycle
+private nonisolated(unsafe) var _albumCardLastClickTime: Date = .distantPast
+
 struct ArtistDetailView: View {
     let artist: Artist
+    @Binding var navigationPath: NavigationPath
     @Environment(PlayerViewModel.self) private var player
     @Environment(ArtworkService.self) private var artworkService
     @Environment(\.modelContext) private var modelContext
-    @Environment(\.navigationPath) private var navigationPath
     @State private var selectedAlbumID: PersistentIdentifier?
     @State private var selectedTrackID: PersistentIdentifier?
     @State private var isFetchingArtwork = false
+    @State private var allTracks: [Track] = []
 
-    private var allTracks: [Track] {
+    private func sortedTracks() -> [Track] {
         artist.tracks.sorted { lhs, rhs in
             let lhsYear = lhs.album?.year ?? 0
             let rhsYear = rhs.album?.year ?? 0
@@ -117,7 +121,7 @@ struct ArtistDetailView: View {
                                     selectedTrackID = nil
                                 },
                                 onNavigate: {
-                                    navigationPath.wrappedValue.append(album)
+                                    navigationPath.append(album)
                                 },
                                 onRemove: { removeAlbum(album) }
                             )
@@ -156,6 +160,8 @@ struct ArtistDetailView: View {
                 }
             }
         }
+        .task { allTracks = sortedTracks() }
+        .onChange(of: artist.tracks.count) { _, _ in allTracks = sortedTracks() }
         .onReceive(NotificationCenter.default.publisher(for: .highlightTrackInDetail)) { notification in
             guard let trackID = notification.userInfo?["trackID"] as? PersistentIdentifier else { return }
             // Only act if this track belongs to this artist
@@ -228,27 +234,48 @@ private struct ArtistAlbumCard: View {
     @Environment(\.modelContext) private var modelContext
     @State private var isFetching = false
     @State private var showEditSheet = false
+    @State private var artwork: NSImage?
 
     var body: some View {
-        AlbumCard(
-            name: album.name,
-            artist: artistName,
-            artwork: album.artworkData.flatMap { NSImage(data: $0) },
-            isLoading: isFetching
-        )
-        .padding(6)
-        .background(
-            RoundedRectangle(cornerRadius: 10)
-                .fill(isSelected ? Color.accentColor.opacity(0.15) : Color.clear)
-        )
-        .contentShape(Rectangle())
-        .onClicks(single: { onSelect() }, double: { onNavigate() })
+        Button {
+            let now = Date()
+            if now.timeIntervalSince(_albumCardLastClickTime) < NSEvent.doubleClickInterval {
+                _albumCardLastClickTime = .distantPast
+                onNavigate()
+            } else {
+                _albumCardLastClickTime = now
+                onSelect()
+            }
+        } label: {
+            AlbumCard(
+                name: album.name,
+                artist: artistName,
+                artwork: artwork,
+                isLoading: isFetching
+            )
+            .padding(6)
+            .background(
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(isSelected ? Color.accentColor.opacity(0.15) : Color.clear)
+            )
+        }
+        .buttonStyle(.plain)
+        .task {
+            artwork = album.artworkData.flatMap { NSImage(data: $0) }
+            guard artwork == nil else { return }
+            isFetching = true
+            await artworkService.fetchAlbumArtwork(for: album, context: modelContext)
+            artwork = album.artworkData.flatMap { NSImage(data: $0) }
+            isFetching = false
+        }
         .contextMenu {
             Button("Find Artwork") {
                 Task {
                     album.artworkData = nil
+                    artwork = nil
                     isFetching = true
                     await artworkService.fetchAlbumArtwork(for: album, context: modelContext, force: true)
+                    artwork = album.artworkData.flatMap { NSImage(data: $0) }
                     isFetching = false
                 }
             }
@@ -275,6 +302,7 @@ private struct ArtistAlbumCard: View {
         if panel.runModal() == .OK, let url = panel.url,
            let data = try? Data(contentsOf: url) {
             album.artworkData = data
+            artwork = NSImage(data: data)
             for track in album.tracks where track.artworkData == nil {
                 track.artworkData = data
             }
