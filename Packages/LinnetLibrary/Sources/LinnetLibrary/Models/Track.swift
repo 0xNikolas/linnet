@@ -34,6 +34,7 @@ public final class Track {
     public var dateAdded: Date
     public var lastPlayed: Date?
     public var playCount: Int
+    public var likedStatus: Int = 0  // -1 = disliked, 0 = neutral, 1 = liked
 
     public init(
         filePath: String,
