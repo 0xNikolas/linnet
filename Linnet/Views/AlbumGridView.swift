@@ -114,6 +114,7 @@ private struct AlbumGridItem: View {
             Button("Choose Artwork...") {
                 chooseArtworkFile(for: album)
             }
+            LikeDislikeMenu(tracks: album.tracks)
             Divider()
             Button("Edit Album...") { showEditSheet = true }
             Divider()

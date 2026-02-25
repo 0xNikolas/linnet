@@ -283,6 +283,7 @@ private struct ArtistAlbumCard: View {
                 chooseArtworkFile()
             }
             AddToPlaylistMenu(tracks: album.tracks)
+            LikeDislikeMenu(tracks: album.tracks)
             Divider()
             Button("Edit Album...") { showEditSheet = true }
             Divider()
@@ -342,6 +343,12 @@ private struct ArtistTrackRow: View {
                     .lineLimit(1)
             }
 
+            if track.likedStatus == 1 {
+                Image(systemName: "heart.fill")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.red)
+            }
+
             Spacer(minLength: 12)
 
             Text(formatTime(track.duration))
@@ -354,6 +361,7 @@ private struct ArtistTrackRow: View {
             RoundedRectangle(cornerRadius: 6)
                 .fill(isSelected ? Color.accentColor.opacity(0.15) : Color.clear)
         )
+        .opacity(track.likedStatus == -1 ? 0.5 : 1.0)
         .contentShape(Rectangle())
         .onClicks(single: {
             onSelect()
@@ -365,6 +373,7 @@ private struct ArtistTrackRow: View {
             Button("Play Next") { onPlayNext(track) }
             Button("Play Later") { onPlayLater(track) }
             AddToPlaylistMenu(tracks: [track])
+            LikeDislikeMenu(tracks: [track])
             Divider()
             Button("Remove from Library", role: .destructive) { onRemove(track) }
         }

@@ -104,6 +104,7 @@ struct ListenNowView: View {
                                         player.addLater(track)
                                     }
                                     AddToPlaylistMenu(tracks: [track])
+                                    LikeDislikeMenu(tracks: [track])
                                     Divider()
                                     Button("Remove from Library", role: .destructive) {
                                         removeTrack(track)
@@ -141,6 +142,8 @@ struct ListenNowView: View {
                                     await artworkService.fetchAlbumArtwork(for: album, context: modelContext)
                                 }
                                 .contextMenu {
+                                    LikeDislikeMenu(tracks: album.tracks)
+                                    Divider()
                                     Button("Remove from Library", role: .destructive) {
                                         removeAlbum(album)
                                     }

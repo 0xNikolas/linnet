@@ -239,9 +239,17 @@ private struct SongsTableView: View {
         .customizationID("trackNumber")
 
         TableColumn("Title", value: \.title) { track in
-            Text(track.title)
-                .font(.system(size: 13))
-                .id(track.persistentModelID)
+            HStack(spacing: 4) {
+                Text(track.title)
+                    .font(.system(size: 13))
+                if track.likedStatus == 1 {
+                    Image(systemName: "heart.fill")
+                        .font(.system(size: 9))
+                        .foregroundStyle(.red)
+                }
+            }
+            .opacity(track.likedStatus == -1 ? 0.5 : 1.0)
+            .id(track.persistentModelID)
         }
         .customizationID("title")
 
@@ -382,6 +390,7 @@ private struct SongsTableView: View {
                 onPlayLater(track)
             }
             AddToPlaylistMenu(tracks: [track])
+            LikeDislikeMenu(tracks: [track])
             Divider()
             Button("Remove from Library", role: .destructive) {
                 onRemove(ids)

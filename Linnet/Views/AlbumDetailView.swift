@@ -221,6 +221,7 @@ private struct AlbumTrackListView: View {
             }
             Divider()
             AddToPlaylistMenu(tracks: selectedTracks(for: ids))
+            LikeDislikeMenu(tracks: selectedTracks(for: ids))
             Divider()
             Button("Remove from Library", role: .destructive) {
                 onRemove(ids)
