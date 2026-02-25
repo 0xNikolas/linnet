@@ -1,8 +1,8 @@
 import SwiftUI
 
 enum NavigationTab: String, CaseIterable, Identifiable {
-    case listenNow = "Listen Now"
     case browse = "Browse"
+    case listenNow = "Listen Now"
     case playlists = "Playlists"
     case ai = "AI"
 

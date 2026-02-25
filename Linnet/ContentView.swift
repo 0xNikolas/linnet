@@ -4,7 +4,7 @@ import LinnetLibrary
 
 struct ContentView: View {
     @Environment(PlayerViewModel.self) private var player
-    @State private var selectedTab: NavigationTab = .listenNow
+    @State private var selectedTab: NavigationTab = .browse
     @State private var selectedSidebarItem: SidebarItem? = .songs
     @State private var isDropTargeted = false
     @State private var navigationPath = NavigationPath()

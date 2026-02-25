@@ -1,6 +1,32 @@
 import SwiftUI
 import SwiftData
+import AppKit
 import LinnetLibrary
+
+// MARK: - Native AppKit Tooltip
+
+private struct TooltipView: NSViewRepresentable {
+    let tooltip: String
+
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView()
+        view.toolTip = tooltip
+        return view
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+        nsView.toolTip = tooltip
+    }
+}
+
+private extension View {
+    func toolTip(_ tip: String?) -> some View {
+        if let tip, !tip.isEmpty {
+            return AnyView(self.overlay(TooltipView(tooltip: tip)))
+        }
+        return AnyView(self)
+    }
+}
 
 private func formatTime(_ seconds: Double) -> String {
     let mins = Int(seconds) / 60
@@ -34,6 +60,7 @@ private func formatFileSize(_ bytes: Int64) -> String {
 
 struct SongsListView: View {
     let tracks: [Track]
+    var sections: [TrackSection] = []
     @Binding var highlightedTrackID: PersistentIdentifier?
     @Environment(PlayerViewModel.self) private var player
     @Environment(\.modelContext) private var modelContext
@@ -44,6 +71,7 @@ struct SongsListView: View {
         } else {
             SongsTableView(
                 tracks: tracks,
+                sections: sections,
                 highlightedTrackID: $highlightedTrackID,
                 onPlay: { track, queue, index in
                     player.playTrack(track, queue: queue, startingAt: index)
@@ -83,6 +111,7 @@ struct SongsListView: View {
 
 private struct SongsTableView: View {
     let tracks: [Track]
+    let sections: [TrackSection]
     @Binding var highlightedTrackID: PersistentIdentifier?
     let onPlay: (Track, [Track], Int) -> Void
     let onPlayNext: (Track) -> Void
@@ -92,6 +121,7 @@ private struct SongsTableView: View {
     @State private var selectedTrackIDs: Set<PersistentIdentifier> = []
     @State private var sortOrder = [KeyPathComparator(\Track.title)]
     @State private var sortedTracks: [Track] = []
+    @State private var sortedSections: [TrackSection] = []
     @SceneStorage("SongsTableConfig") private var columnCustomization: TableColumnCustomization<Track>
 
     /// Lightweight cache of relationship data to avoid repeated SwiftData faulting during scroll.
@@ -99,6 +129,14 @@ private struct SongsTableView: View {
     @State private var albumNames: [PersistentIdentifier: String] = [:]
 
     @State private var scrollTarget: PersistentIdentifier?
+    @State private var expandedSections: Set<String> = []
+
+    private var isGrouped: Bool { !sections.isEmpty }
+
+    /// Flat playback queue respecting current display order.
+    private var playbackQueue: [Track] {
+        isGrouped ? sortedSections.flatMap(\.tracks) : sortedTracks
+    }
 
     var body: some View {
         ScrollViewReader { proxy in
@@ -107,16 +145,25 @@ private struct SongsTableView: View {
                 .contextMenu(forSelectionType: PersistentIdentifier.self) { ids in
                     contextMenuContent(for: ids)
                 } primaryAction: { ids in
-                    if let id = ids.first, let index = sortedTracks.firstIndex(where: { $0.id == id }) {
-                        onPlay(sortedTracks[index], sortedTracks, index)
+                    let queue = playbackQueue
+                    if let id = ids.first, let index = queue.firstIndex(where: { $0.id == id }) {
+                        onPlay(queue[index], queue, index)
                     }
                 }
                 .onChange(of: tracks, initial: true) { _, newTracks in
                     sortedTracks = newTracks.sorted(using: sortOrder)
                     rebuildRelationshipCaches(from: newTracks)
+                    rebuildSortedSections()
+                    expandedSections.formUnion(sections.map(\.id))
+                }
+                .onChange(of: sections.map(\.id)) { _, newIDs in
+                    rebuildSortedSections()
+                    // Expand new sections by default
+                    expandedSections.formUnion(newIDs)
                 }
                 .onChange(of: sortOrder) { _, newOrder in
                     sortedTracks = tracks.sorted(using: newOrder)
+                    rebuildSortedSections()
                 }
                 .onChange(of: highlightedTrackID, initial: true) { _, newID in
                     if let id = newID {
@@ -137,11 +184,47 @@ private struct SongsTableView: View {
     }
 
     // Extracted to help the Swift type checker with complex Table expressions
+    @ViewBuilder
     private var songsTable: some View {
-        Table(sortedTracks, selection: $selectedTrackIDs, sortOrder: $sortOrder, columnCustomization: $columnCustomization) {
-            coreColumns
-            metadataColumns
-            audioColumns
+        if isGrouped {
+            Table(of: Track.self, selection: $selectedTrackIDs, sortOrder: $sortOrder, columnCustomization: $columnCustomization) {
+                coreColumns
+                metadataColumns
+                audioColumns
+            } rows: {
+                ForEach(sortedSections) { section in
+                    Section(isExpanded: Binding(
+                        get: { expandedSections.contains(section.id) },
+                        set: { expanded in
+                            if expanded {
+                                expandedSections.insert(section.id)
+                            } else {
+                                expandedSections.remove(section.id)
+                            }
+                        }
+                    )) {
+                        ForEach(section.tracks) { track in
+                            TableRow(track)
+                        }
+                    } header: {
+                        Text(section.id)
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundStyle(.primary)
+                            .padding(.bottom, 4)
+                            .toolTip(section.tooltip)
+                    }
+                }
+            }
+        } else {
+            Table(of: Track.self, selection: $selectedTrackIDs, sortOrder: $sortOrder, columnCustomization: $columnCustomization) {
+                coreColumns
+                metadataColumns
+                audioColumns
+            } rows: {
+                ForEach(sortedTracks) { track in
+                    TableRow(track)
+                }
+            }
         }
     }
 
@@ -265,6 +348,12 @@ private struct SongsTableView: View {
         .defaultVisibility(.hidden)
     }
 
+    private func rebuildSortedSections() {
+        sortedSections = sections.map { section in
+            TrackSection(id: section.id, tracks: section.tracks.sorted(using: sortOrder), tooltip: section.tooltip)
+        }
+    }
+
     private func rebuildRelationshipCaches(from trackList: [Track]) {
         var artists: [PersistentIdentifier: String] = [:]
         var albums: [PersistentIdentifier: String] = [:]
@@ -280,10 +369,11 @@ private struct SongsTableView: View {
 
     @ViewBuilder
     private func contextMenuContent(for ids: Set<PersistentIdentifier>) -> some View {
-        if let id = ids.first, let index = sortedTracks.firstIndex(where: { $0.id == id }) {
-            let track = sortedTracks[index]
+        let queue = playbackQueue
+        if let id = ids.first, let index = queue.firstIndex(where: { $0.id == id }) {
+            let track = queue[index]
             Button("Play") {
-                onPlay(track, sortedTracks, index)
+                onPlay(track, queue, index)
             }
             Button("Play Next") {
                 onPlayNext(track)

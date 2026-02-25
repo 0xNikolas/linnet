@@ -6,27 +6,25 @@ import LinnetLibrary
 
 enum SongsGrouping: String, CaseIterable, Identifiable {
     case allSongs = "All Songs"
+    case byFolder = "By Folder"
     case byArtist = "By Artist"
     case byAlbum = "By Album"
-    case byFolder = "By Folder"
-    case byGenre = "By Genre"
 
     var id: String { rawValue }
 }
 
 // MARK: - Grouped Section Model
 
-private struct TrackSection: Identifiable {
+struct TrackSection: Identifiable {
     let id: String
+    let tooltip: String?
     let tracks: [Track]
-}
 
-// MARK: - Time Formatting
-
-private func formatTime(_ seconds: Double) -> String {
-    let mins = Int(seconds) / 60
-    let secs = Int(seconds) % 60
-    return String(format: "%d:%02d", mins, secs)
+    init(id: String, tracks: [Track], tooltip: String? = nil) {
+        self.id = id
+        self.tracks = tracks
+        self.tooltip = tooltip
+    }
 }
 
 // MARK: - Wrapper View
@@ -34,7 +32,7 @@ private func formatTime(_ seconds: Double) -> String {
 struct SongsGroupingView: View {
     @Binding var highlightedTrackID: PersistentIdentifier?
     @Query(sort: \Track.title) private var tracks: [Track]
-    @AppStorage("songsGrouping") private var grouping: SongsGrouping = .allSongs
+    @AppStorage("songsGrouping") private var grouping: SongsGrouping = .byFolder
     @State private var sections: [TrackSection] = []
     @State private var searchText = ""
     @State private var isSearchPresented = false
@@ -55,11 +53,11 @@ struct SongsGroupingView: View {
             groupingPicker
             Divider()
 
-            if grouping == .allSongs {
-                SongsListView(tracks: filteredTracks, highlightedTrackID: $highlightedTrackID)
-            } else {
-                GroupedSongsView(sections: sections)
-            }
+            SongsListView(
+                tracks: filteredTracks,
+                sections: grouping == .allSongs ? [] : sections,
+                highlightedTrackID: $highlightedTrackID
+            )
         }
         .searchable(text: $searchText, isPresented: $isSearchPresented, prompt: "Search songs...")
         .onReceive(NotificationCenter.default.publisher(for: .focusSearch)) { _ in
@@ -87,7 +85,7 @@ struct SongsGroupingView: View {
             }
             .pickerStyle(.segmented)
             .labelsHidden()
-            .frame(maxWidth: 500)
+            .frame(maxWidth: 400)
 
             Spacer()
 
@@ -107,160 +105,37 @@ struct SongsGroupingView: View {
             return
         }
         let source = filteredTracks
-        let grouped: [String: [Track]]
+
         switch grouping {
         case .allSongs:
             sections = []
             return
         case .byArtist:
-            grouped = Dictionary(grouping: source) { $0.artist?.name ?? "Unknown Artist" }
+            let grouped = Dictionary(grouping: source) { $0.artist?.name ?? "Unknown Artist" }
+            sections = grouped
+                .map { TrackSection(id: $0.key, tracks: sortTracks($0.value)) }
+                .sorted { $0.id.localizedCaseInsensitiveCompare($1.id) == .orderedAscending }
         case .byAlbum:
-            grouped = Dictionary(grouping: source) { $0.album?.name ?? "Unknown Album" }
+            let grouped = Dictionary(grouping: source) { $0.album?.name ?? "Unknown Album" }
+            sections = grouped
+                .map { TrackSection(id: $0.key, tracks: sortTracks($0.value)) }
+                .sorted { $0.id.localizedCaseInsensitiveCompare($1.id) == .orderedAscending }
         case .byFolder:
-            grouped = Dictionary(grouping: source) { track in
-                let url = URL(filePath: track.filePath)
-                return url.deletingLastPathComponent().lastPathComponent
+            let grouped = Dictionary(grouping: source) { track -> String in
+                URL(filePath: track.filePath).deletingLastPathComponent().path
             }
-        case .byGenre:
-            grouped = Dictionary(grouping: source) { $0.genre ?? "Unknown Genre" }
-        }
-        sections = grouped
-            .map { TrackSection(id: $0.key, tracks: $0.value.sorted { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }) }
-            .sorted { $0.id.localizedCaseInsensitiveCompare($1.id) == .orderedAscending }
-    }
-}
-
-// MARK: - Grouped Songs View
-
-private struct GroupedSongsView: View {
-    let sections: [TrackSection]
-    @Environment(PlayerViewModel.self) private var player
-    @Environment(\.modelContext) private var modelContext
-    @State private var selectedTrackIDs: Set<PersistentIdentifier> = []
-
-    /// Flattened list of all tracks across sections, used for building the playback queue.
-    private var allTracks: [Track] {
-        sections.flatMap(\.tracks)
-    }
-
-    var body: some View {
-        if sections.isEmpty {
-            ContentUnavailableView("No Songs", systemImage: "music.note",
-                                   description: Text("Add a music folder in Settings to get started."))
-        } else {
-            List(selection: $selectedTrackIDs) {
-                ForEach(sections) { section in
-                    Section {
-                        ForEach(section.tracks) { track in
-                            GroupedTrackRow(track: track)
-                                .tag(track.persistentModelID)
-                        }
-                    } header: {
-                        Text(section.id)
-                            .font(.system(size: 14, weight: .bold))
-                            .foregroundStyle(.primary)
-                            .padding(.vertical, 2)
-                    }
+            sections = grouped
+                .map { fullPath, tracks in
+                    // Show last 2 path components as display name (e.g. "Artist/Album")
+                    let components = fullPath.split(separator: "/")
+                    let displayName = components.suffix(2).joined(separator: "/")
+                    return TrackSection(id: displayName, tracks: sortTracks(tracks), tooltip: fullPath)
                 }
-            }
-            .listStyle(.inset)
-            .environment(\.defaultMinListRowHeight, 28)
-            .contextMenu(forSelectionType: PersistentIdentifier.self) { ids in
-                contextMenuContent(for: ids)
-            } primaryAction: { ids in
-                if let id = ids.first {
-                    let flat = allTracks
-                    if let index = flat.firstIndex(where: { $0.persistentModelID == id }) {
-                        player.playTrack(flat[index], queue: flat, startingAt: index)
-                    }
-                }
-            }
+                .sorted { $0.id.localizedCaseInsensitiveCompare($1.id) == .orderedAscending }
         }
     }
 
-    @ViewBuilder
-    private func contextMenuContent(for ids: Set<PersistentIdentifier>) -> some View {
-        if let id = ids.first {
-            let flat = allTracks
-            if let index = flat.firstIndex(where: { $0.persistentModelID == id }) {
-                let track = flat[index]
-                Button("Play") {
-                    player.playTrack(track, queue: flat, startingAt: index)
-                }
-                Button("Play Next") {
-                    player.addNext(track)
-                }
-                Button("Play Later") {
-                    player.addLater(track)
-                }
-                AddToPlaylistMenu(tracks: [track])
-                Divider()
-                Button("Remove from Library", role: .destructive) {
-                    for selectedID in ids {
-                        if let t = flat.first(where: { $0.persistentModelID == selectedID }) {
-                            removeTrack(t)
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    private func removeTrack(_ track: Track) {
-        let album = track.album
-        let artist = track.artist
-        modelContext.delete(track)
-        if let album, album.tracks.isEmpty {
-            modelContext.delete(album)
-        }
-        if let artist, artist.tracks.isEmpty {
-            modelContext.delete(artist)
-        }
-        try? modelContext.save()
-    }
-}
-
-// MARK: - Grouped Track Row
-
-private struct GroupedTrackRow: View {
-    let track: Track
-
-    var body: some View {
-        HStack(spacing: 0) {
-            Text("\(track.trackNumber)")
-                .font(.system(size: 12))
-                .foregroundStyle(.tertiary)
-                .frame(width: 30, alignment: .trailing)
-                .padding(.trailing, 8)
-
-            Text(track.title)
-                .font(.system(size: 13))
-                .lineLimit(1)
-                .frame(minWidth: 120, alignment: .leading)
-
-            Spacer(minLength: 12)
-
-            Text(track.artist?.name ?? "Unknown")
-                .font(.system(size: 13))
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-                .frame(minWidth: 100, alignment: .leading)
-
-            Spacer(minLength: 12)
-
-            Text(track.album?.name ?? "Unknown")
-                .font(.system(size: 13))
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-                .frame(minWidth: 100, alignment: .leading)
-
-            Spacer(minLength: 12)
-
-            Text(formatTime(track.duration))
-                .font(.system(size: 12, design: .monospaced))
-                .foregroundStyle(.secondary)
-                .frame(width: 50, alignment: .trailing)
-        }
-        .contentShape(Rectangle())
+    private func sortTracks(_ tracks: [Track]) -> [Track] {
+        tracks.sorted { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
     }
 }
