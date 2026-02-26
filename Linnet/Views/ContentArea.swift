@@ -22,6 +22,8 @@ struct ContentArea: View {
                         ArtistListView()
                     case .songs:
                         SongsGroupingView(highlightedTrackID: $highlightedTrackID)
+                    case .likedSongs:
+                        LikedSongsView(highlightedTrackID: $highlightedTrackID)
                     case .folders:
                         FolderBrowserView()
                     case .recentlyAdded:
