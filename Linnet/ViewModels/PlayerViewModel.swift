@@ -195,6 +195,36 @@ public final class PlayerViewModel {
         }
     }
 
+    func removeFromQueue(at offsets: IndexSet) {
+        for offset in offsets.sorted().reversed() {
+            let trackIndex = queue.currentIndex + 1 + offset
+            queue.remove(at: offset)
+            if trackIndex < queuedTracks.count {
+                queuedTracks.remove(at: trackIndex)
+            }
+        }
+    }
+
+    func moveInQueue(from source: IndexSet, to destination: Int) {
+        guard let sourceIndex = source.first else { return }
+        let adjustedDest = destination > sourceIndex ? destination - 1 : destination
+        queue.move(from: sourceIndex, to: adjustedDest)
+
+        let trackSource = queue.currentIndex + 1 + sourceIndex
+        let trackDest = queue.currentIndex + 1 + adjustedDest
+        guard trackSource < queuedTracks.count else { return }
+        let track = queuedTracks.remove(at: trackSource)
+        queuedTracks.insert(track, at: min(trackDest, queuedTracks.count))
+    }
+
+    func playFromQueue(at upcomingIndex: Int) {
+        let targetIndex = queue.currentIndex + 1 + upcomingIndex
+        guard targetIndex < queuedTracks.count else { return }
+        queue.jumpTo(index: targetIndex)
+        updateMetadata(for: queuedTracks[targetIndex])
+        loadAndPlay(filePath: queuedTracks[targetIndex].filePath)
+    }
+
     func toggleLike() {
         guard let track = currentQueueTrack else { return }
         track.likedStatus = track.likedStatus == 1 ? 0 : 1

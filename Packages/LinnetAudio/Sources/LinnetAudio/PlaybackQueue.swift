@@ -76,6 +76,21 @@ public struct PlaybackQueue: Sendable {
         tracks.insert(item, at: adjustedDest)
     }
 
+    /// Remove a track at the given offset from upcoming tracks.
+    /// offset 0 = first upcoming track (currentIndex + 1).
+    public mutating func remove(at offset: Int) {
+        let adjustedIndex = currentIndex + 1 + offset
+        guard adjustedIndex < tracks.count else { return }
+        tracks.remove(at: adjustedIndex)
+    }
+
+    /// Jump to a specific index in the queue.
+    public mutating func jumpTo(index: Int) {
+        guard index < tracks.count else { return }
+        history.append(currentIndex)
+        currentIndex = index
+    }
+
     public mutating func clear() {
         let current = tracks.indices.contains(currentIndex) ? tracks[currentIndex] : nil
         tracks = current.map { [$0] } ?? []
