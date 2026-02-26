@@ -7,6 +7,7 @@ extension Notification.Name {
     static let focusSearch = Notification.Name("focusSearch")
     static let openSettings = Notification.Name("openSettings")
     static let toggleQueueSidePane = Notification.Name("toggleQueueSidePane")
+    static let registerBreadcrumb = Notification.Name("registerBreadcrumb")
 }
 
 struct NowPlayingBar: View {

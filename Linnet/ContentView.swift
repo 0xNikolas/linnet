@@ -10,6 +10,7 @@ struct ContentView: View {
     @State private var navigationPath = NavigationPath()
     @State private var highlightedTrackID: PersistentIdentifier?
     @AppStorage("showQueueSidePane") private var showQueueSidePane = false
+    @State private var breadcrumbs: [BreadcrumbItem] = []
 
     var body: some View {
         NavigationSplitView {
@@ -17,14 +18,39 @@ struct ContentView: View {
         } detail: {
             HStack(spacing: 0) {
                 NavigationStack(path: $navigationPath) {
-                    ContentArea(tab: selectedTab, sidebarItem: selectedSidebarItem, highlightedTrackID: $highlightedTrackID)
+                    VStack(spacing: 0) {
+                        if breadcrumbs.count > 1 {
+                            BreadcrumbBar(items: breadcrumbs) { level in
+                                let popCount = navigationPath.count - level
+                                for _ in 0..<popCount {
+                                    navigationPath.removeLast()
+                                }
+                            }
+                            Divider()
+                        }
+                        ContentArea(tab: selectedTab, sidebarItem: selectedSidebarItem, highlightedTrackID: $highlightedTrackID)
+                    }
                         .navigationDestination(for: Album.self) { album in
                             let _ = Log.navigation.debug("Pushing AlbumDetailView: \(album.name)")
                             AlbumDetailView(album: album)
+                                .onAppear {
+                                    NotificationCenter.default.post(
+                                        name: .registerBreadcrumb,
+                                        object: nil,
+                                        userInfo: ["title": album.name]
+                                    )
+                                }
                         }
                         .navigationDestination(for: Artist.self) { artist in
                             let _ = Log.navigation.debug("Pushing ArtistDetailView: \(artist.name)")
                             ArtistDetailView(artist: artist, navigationPath: $navigationPath)
+                                .onAppear {
+                                    NotificationCenter.default.post(
+                                        name: .registerBreadcrumb,
+                                        object: nil,
+                                        userInfo: ["title": artist.name]
+                                    )
+                                }
                         }
                 }
                 .id("\(selectedTab)-\(selectedSidebarItem.map { "\($0)" } ?? "none")")
@@ -52,12 +78,29 @@ struct ContentView: View {
         }
         .onChange(of: selectedSidebarItem) { _, newItem in
             navigationPath = NavigationPath()
+            breadcrumbs = [BreadcrumbItem(title: newItem?.label ?? "Browse", level: 0)]
             if newItem != nil && selectedTab != .browse {
                 selectedTab = .browse
             }
         }
         .onChange(of: selectedTab) { _, _ in
             navigationPath = NavigationPath()
+            breadcrumbs = [BreadcrumbItem(title: selectedSidebarItem?.label ?? "Browse", level: 0)]
+        }
+        .onChange(of: navigationPath.count) { oldCount, newCount in
+            if newCount < oldCount {
+                breadcrumbs = Array(breadcrumbs.prefix(newCount + 1))
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .registerBreadcrumb)) { notification in
+            guard let title = notification.userInfo?["title"] as? String else { return }
+            let level = navigationPath.count
+            if breadcrumbs.count <= level {
+                breadcrumbs.append(BreadcrumbItem(title: title, level: level))
+            }
+        }
+        .onAppear {
+            breadcrumbs = [BreadcrumbItem(title: selectedSidebarItem?.label ?? "Browse", level: 0)]
         }
         .onReceive(NotificationCenter.default.publisher(for: .navigateToCurrentTrack)) { _ in
             guard let track = player.currentQueueTrack else { return }
