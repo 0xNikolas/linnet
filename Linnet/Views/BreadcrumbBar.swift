@@ -15,7 +15,7 @@ struct BreadcrumbBar: View {
             forEachItem(items) { item in
                 if item.level > 0 {
                     Image(systemName: "chevron.right")
-                        .font(.system(size: 10))
+                        .font(.app(size: 10))
                         .foregroundStyle(.tertiary)
                 }
 
@@ -24,11 +24,11 @@ struct BreadcrumbBar: View {
                         onNavigate(item.level)
                     }
                     .buttonStyle(.plain)
-                    .font(.system(size: 12))
+                    .font(.app(size: 12))
                     .foregroundStyle(.tint)
                 } else {
                     Text(item.title)
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(.app(size: 12, weight: .semibold))
                 }
             }
             Spacer()

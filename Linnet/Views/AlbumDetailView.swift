@@ -39,7 +39,7 @@ struct AlbumDetailView: View {
                             ProgressView()
                         } else {
                             Image(systemName: "music.note")
-                                .font(.system(size: 40))
+                                .font(.app(size: 40))
                                 .foregroundStyle(.secondary)
                         }
                     }
@@ -69,19 +69,37 @@ struct AlbumDetailView: View {
 
                 VStack(alignment: .leading, spacing: 8) {
                     Text(album.name)
-                        .font(.system(size: 28, weight: .bold))
-                    Text(album.artistName ?? "Unknown Artist")
-                        .font(.system(size: 18))
-                        .foregroundStyle(.secondary)
+                        .font(.app(size: 28, weight: .bold))
+                    if let artist = album.artist {
+                        Button {
+                            NotificationCenter.default.post(name: .navigateToArtist, object: nil, userInfo: ["artist": artist])
+                        } label: {
+                            Text(artist.name)
+                                .font(.app(size: 18))
+                                .foregroundStyle(.secondary)
+                        }
+                        .buttonStyle(.plain)
+                        .onHover { hovering in
+                            if hovering {
+                                NSCursor.pointingHand.push()
+                            } else {
+                                NSCursor.pop()
+                            }
+                        }
+                    } else {
+                        Text(album.artistName ?? "Unknown Artist")
+                            .font(.app(size: 18))
+                            .foregroundStyle(.secondary)
+                    }
 
                     HStack(spacing: 8) {
                         if let year = album.year {
                             Text(String(year))
-                                .font(.system(size: 13))
+                                .font(.app(size: 13))
                                 .foregroundStyle(.tertiary)
                         }
                         Text("\(sortedTracks.count) songs")
-                            .font(.system(size: 13))
+                            .font(.app(size: 13))
                             .foregroundStyle(.tertiary)
                     }
 
@@ -182,17 +200,17 @@ private struct AlbumTrackListView: View {
         List(sortedTracks, selection: $selectedTrackIDs) { track in
             HStack {
                 Text("\(track.trackNumber)")
-                    .font(.system(size: 13))
+                    .font(.app(size: 13))
                     .foregroundStyle(.secondary)
                     .frame(width: 30, alignment: .trailing)
 
                 Text(track.title)
-                    .font(.system(size: 13))
+                    .font(.app(size: 13))
 
                 Spacer()
 
                 Text(formatTime(track.duration))
-                    .font(.system(size: 13, design: .monospaced))
+                    .font(.app(size: 13, design: .monospaced))
                     .foregroundStyle(.secondary)
             }
         }
@@ -222,6 +240,12 @@ private struct AlbumTrackListView: View {
             Divider()
             AddToPlaylistMenu(tracks: selectedTracks(for: ids))
             LikeDislikeMenu(tracks: selectedTracks(for: ids))
+            Divider()
+            if let artist = track.artist {
+                Button("Go to Artist") {
+                    NotificationCenter.default.post(name: .navigateToArtist, object: nil, userInfo: ["artist": artist])
+                }
+            }
             Divider()
             Button("Remove from Library", role: .destructive) {
                 onRemove(ids)

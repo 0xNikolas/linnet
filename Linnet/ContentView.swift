@@ -4,8 +4,7 @@ import LinnetLibrary
 
 struct ContentView: View {
     @Environment(PlayerViewModel.self) private var player
-    @State private var selectedTab: NavigationTab = .browse
-    @State private var selectedSidebarItem: SidebarItem? = .songs
+    @State private var selectedSidebarItem: SidebarItem? = .listenNow
     @State private var isDropTargeted = false
     @State private var navigationPath = NavigationPath()
     @State private var highlightedTrackID: PersistentIdentifier?
@@ -28,7 +27,7 @@ struct ContentView: View {
                             }
                             Divider()
                         }
-                        ContentArea(tab: selectedTab, sidebarItem: selectedSidebarItem, highlightedTrackID: $highlightedTrackID)
+                        ContentArea(sidebarItem: selectedSidebarItem, highlightedTrackID: $highlightedTrackID)
                     }
                         .navigationDestination(for: Album.self) { album in
                             let _ = Log.navigation.debug("Pushing AlbumDetailView: \(album.name)")
@@ -52,8 +51,11 @@ struct ContentView: View {
                                     )
                                 }
                         }
+                        .navigationDestination(for: PersistentIdentifier.self) { id in
+                            PlaylistDetailView(playlistID: id)
+                        }
                 }
-                .id("\(selectedTab)-\(selectedSidebarItem.map { "\($0)" } ?? "none")")
+                .id(selectedSidebarItem.map { "\($0)" } ?? "none")
                 .environment(\.navigationPath, $navigationPath)
 
                 if showQueueSidePane {
@@ -65,27 +67,9 @@ struct ContentView: View {
         .safeAreaInset(edge: .bottom) {
             NowPlayingBar()
         }
-        .toolbar {
-            ToolbarItemGroup(placement: .principal) {
-                Picker("", selection: $selectedTab) {
-                    ForEach(NavigationTab.allCases) { tab in
-                        Text(tab.rawValue).tag(tab)
-                    }
-                }
-                .pickerStyle(.segmented)
-                .frame(width: 350)
-            }
-        }
         .onChange(of: selectedSidebarItem) { _, newItem in
             navigationPath = NavigationPath()
-            breadcrumbs = [BreadcrumbItem(title: newItem?.label ?? "Browse", level: 0)]
-            if newItem != nil && selectedTab != .browse {
-                selectedTab = .browse
-            }
-        }
-        .onChange(of: selectedTab) { _, _ in
-            navigationPath = NavigationPath()
-            breadcrumbs = [BreadcrumbItem(title: selectedSidebarItem?.label ?? "Browse", level: 0)]
+            breadcrumbs = [BreadcrumbItem(title: newItem?.label ?? "Home", level: 0)]
         }
         .onChange(of: navigationPath.count) { oldCount, newCount in
             if newCount < oldCount {
@@ -100,12 +84,11 @@ struct ContentView: View {
             }
         }
         .onAppear {
-            breadcrumbs = [BreadcrumbItem(title: selectedSidebarItem?.label ?? "Browse", level: 0)]
+            breadcrumbs = [BreadcrumbItem(title: selectedSidebarItem?.label ?? "Home", level: 0)]
         }
         .onReceive(NotificationCenter.default.publisher(for: .navigateToCurrentTrack)) { _ in
             guard let track = player.currentQueueTrack else { return }
-            // If already viewing the track's artist page, scroll to the track there
-            if selectedTab == .browse && selectedSidebarItem == .artists && !navigationPath.isEmpty {
+            if selectedSidebarItem == .artists && !navigationPath.isEmpty {
                 NotificationCenter.default.post(
                     name: .highlightTrackInDetail,
                     object: nil,
@@ -113,24 +96,46 @@ struct ContentView: View {
                 )
                 return
             }
-            selectedTab = .browse
             selectedSidebarItem = .songs
             navigationPath = NavigationPath()
             highlightedTrackID = track.persistentModelID
         }
         .onReceive(NotificationCenter.default.publisher(for: .navigateToCurrentArtist)) { _ in
             guard let artist = player.currentQueueTrack?.artist else { return }
-            // Already viewing this artist — do nothing
-            if selectedTab == .browse && selectedSidebarItem == .artists && !navigationPath.isEmpty {
+            if selectedSidebarItem == .artists && !navigationPath.isEmpty {
                 return
             }
-            selectedTab = .browse
             selectedSidebarItem = .artists
             navigationPath = NavigationPath()
-            // Small delay to let the view switch happen before pushing
             Task { @MainActor in
                 try? await Task.sleep(for: .milliseconds(100))
                 navigationPath.append(artist)
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .navigateToArtist)) { notification in
+            guard let artist = notification.userInfo?["artist"] as? Artist else { return }
+            selectedSidebarItem = .artists
+            navigationPath = NavigationPath()
+            Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(100))
+                navigationPath.append(artist)
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .navigateToAlbum)) { notification in
+            guard let album = notification.userInfo?["album"] as? Album else { return }
+            selectedSidebarItem = .albums
+            navigationPath = NavigationPath()
+            Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(100))
+                navigationPath.append(album)
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .navigateToPlaylist)) { notification in
+            guard let playlistID = notification.userInfo?["playlistID"] as? PersistentIdentifier else { return }
+            navigationPath = NavigationPath()
+            Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(100))
+                navigationPath.append(playlistID)
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .openSettings)) { _ in

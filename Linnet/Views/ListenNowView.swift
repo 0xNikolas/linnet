@@ -60,17 +60,17 @@ struct ListenNowView: View {
                                                     .scaledToFill()
                                             } else {
                                                 Image(systemName: "music.note")
-                                                    .font(.system(size: 30))
+                                                    .font(.app(size: 30))
                                                     .foregroundStyle(.secondary)
                                             }
                                         }
                                         .clipShape(RoundedRectangle(cornerRadius: 8))
 
                                     Text(track.title)
-                                        .font(.system(size: 13, weight: .medium))
+                                        .font(.app(size: 13, weight: .medium))
                                         .lineLimit(1)
                                     Text(track.artist?.name ?? "Unknown")
-                                        .font(.system(size: 11))
+                                        .font(.app(size: 11))
                                         .foregroundStyle(.secondary)
                                         .lineLimit(1)
                                 }
@@ -105,6 +105,17 @@ struct ListenNowView: View {
                                     }
                                     AddToPlaylistMenu(tracks: [track])
                                     LikeDislikeMenu(tracks: [track])
+                                    Divider()
+                                    if let artist = track.artist {
+                                        Button("Go to Artist") {
+                                            NotificationCenter.default.post(name: .navigateToArtist, object: nil, userInfo: ["artist": artist])
+                                        }
+                                    }
+                                    if let album = track.album {
+                                        Button("Go to Album") {
+                                            NotificationCenter.default.post(name: .navigateToAlbum, object: nil, userInfo: ["album": album])
+                                        }
+                                    }
                                     Divider()
                                     Button("Remove from Library", role: .destructive) {
                                         removeTrack(track)
@@ -144,6 +155,12 @@ struct ListenNowView: View {
                                 .contextMenu {
                                     LikeDislikeMenu(tracks: album.tracks)
                                     Divider()
+                                    if let artist = album.artist {
+                                        Button("Go to Artist") {
+                                            NotificationCenter.default.post(name: .navigateToArtist, object: nil, userInfo: ["artist": artist])
+                                        }
+                                    }
+                                    Divider()
                                     Button("Remove from Library", role: .destructive) {
                                         removeAlbum(album)
                                     }
@@ -155,13 +172,13 @@ struct ListenNowView: View {
                     if searchText.isEmpty {
                         VStack(spacing: 12) {
                             Image(systemName: "sparkles")
-                                .font(.system(size: 28))
+                                .font(.app(size: 28))
                                 .foregroundStyle(.secondary)
                             Text("AI Suggestions")
-                                .font(.system(size: 15, weight: .semibold))
+                                .font(.app(size: 15, weight: .semibold))
                                 .foregroundStyle(.secondary)
                             Text("Set up AI in Settings to get personalized recommendations.")
-                                .font(.system(size: 13))
+                                .font(.app(size: 13))
                                 .foregroundStyle(.tertiary)
                                 .multilineTextAlignment(.center)
                             Button("Open Settings...") {

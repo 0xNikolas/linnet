@@ -90,7 +90,7 @@ struct SongsGroupingView: View {
             Spacer()
 
             Text("\(filteredTracks.count) songs")
-                .font(.system(size: 12))
+                .font(.app(size: 12))
                 .foregroundStyle(.secondary)
         }
         .padding(.horizontal, 12)

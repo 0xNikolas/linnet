@@ -48,7 +48,7 @@ struct ArtistDetailView: View {
                                 ProgressView()
                             } else {
                                 Image(systemName: "music.mic")
-                                    .font(.system(size: 40))
+                                    .font(.app(size: 40))
                                     .foregroundStyle(.secondary)
                             }
                         }
@@ -75,10 +75,10 @@ struct ArtistDetailView: View {
 
                     VStack(alignment: .leading, spacing: 8) {
                         Text(artist.name)
-                            .font(.system(size: 28, weight: .bold))
+                            .font(.app(size: 28, weight: .bold))
 
                         Text("\(artist.albums.count) albums, \(artist.tracks.count) songs")
-                            .font(.system(size: 13))
+                            .font(.app(size: 13))
                             .foregroundStyle(.tertiary)
 
                         HStack(spacing: 12) {
@@ -328,31 +328,31 @@ private struct ArtistTrackRow: View {
     var body: some View {
         HStack(spacing: 0) {
             Text("\(track.trackNumber)")
-                .font(.system(size: 12))
+                .font(.app(size: 12))
                 .foregroundStyle(.tertiary)
                 .frame(width: 30, alignment: .trailing)
                 .padding(.trailing, 8)
 
             VStack(alignment: .leading, spacing: 1) {
                 Text(track.title)
-                    .font(.system(size: 13))
+                    .font(.app(size: 13))
                     .lineLimit(1)
                 Text(track.album?.name ?? "")
-                    .font(.system(size: 11))
+                    .font(.app(size: 11))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
 
             if track.likedStatus == 1 {
                 Image(systemName: "heart.fill")
-                    .font(.system(size: 10))
+                    .font(.app(size: 10))
                     .foregroundStyle(.red)
             }
 
             Spacer(minLength: 12)
 
             Text(formatTime(track.duration))
-                .font(.system(size: 12, design: .monospaced))
+                .font(.app(size: 12, design: .monospaced))
                 .foregroundStyle(.secondary)
         }
         .padding(.vertical, 4)
@@ -374,6 +374,12 @@ private struct ArtistTrackRow: View {
             Button("Play Later") { onPlayLater(track) }
             AddToPlaylistMenu(tracks: [track])
             LikeDislikeMenu(tracks: [track])
+            Divider()
+            if let album = track.album {
+                Button("Go to Album") {
+                    NotificationCenter.default.post(name: .navigateToAlbum, object: nil, userInfo: ["album": album])
+                }
+            }
             Divider()
             Button("Remove from Library", role: .destructive) { onRemove(track) }
         }

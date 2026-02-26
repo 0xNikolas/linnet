@@ -64,7 +64,7 @@ struct AIChatView: View {
 
                 Button(action: { viewModel.sendMessage() }) {
                     Image(systemName: "arrow.up.circle.fill")
-                        .font(.system(size: 24))
+                        .font(.app(size: 24))
                         .foregroundStyle(.tint)
                 }
                 .buttonStyle(.plain)
@@ -82,7 +82,7 @@ struct ChatBubble: View {
         HStack(alignment: .top, spacing: 12) {
             if message.role == .assistant {
                 Image(systemName: "sparkles")
-                    .font(.system(size: 16))
+                    .font(.app(size: 16))
                     .foregroundStyle(.tint)
                     .frame(width: 28, height: 28)
                     .background(Color.accentColor.opacity(0.1))
@@ -91,7 +91,7 @@ struct ChatBubble: View {
 
             VStack(alignment: .leading, spacing: 8) {
                 Text(message.content)
-                    .font(.system(size: 13))
+                    .font(.app(size: 13))
                     .textSelection(.enabled)
 
                 if !message.actions.isEmpty {
@@ -99,7 +99,7 @@ struct ChatBubble: View {
                         ForEach(message.actions) { action in
                             Button(action: {}) {
                                 Label(action.label, systemImage: action.icon)
-                                    .font(.system(size: 12))
+                                    .font(.app(size: 12))
                             }
                             .buttonStyle(.bordered)
                             .controlSize(.small)

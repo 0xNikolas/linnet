@@ -1,13 +1,30 @@
 import SwiftUI
+import SwiftData
+import LinnetLibrary
 
 struct SidebarView: View {
     @Binding var selectedItem: SidebarItem?
     @AppStorage("sidebarConfiguration") private var configuration: SidebarConfiguration = .default
     @State private var showEditSheet = false
+    @State private var showNewPlaylistSheet = false
+    @State private var selectedPlaylistID: PersistentIdentifier?
+    @Environment(\.modelContext) private var modelContext
+    @Query(sort: \Playlist.createdAt) private var playlists: [Playlist]
 
     var body: some View {
         List(selection: $selectedItem) {
-            Section("Library") {
+            Section {
+                Label(SidebarItem.listenNow.label, systemImage: SidebarItem.listenNow.systemImage)
+                    .tag(SidebarItem.listenNow)
+                Label(SidebarItem.ai.label, systemImage: SidebarItem.ai.systemImage)
+                    .tag(SidebarItem.ai)
+            } header: {
+                Text("Home")
+                    .font(.app(size: 11, weight: .semibold))
+                    .foregroundStyle(.secondary)
+            }
+
+            Section {
                 ForEach(configuration.visibleItems, id: \.self) { item in
                     Label(item.label, systemImage: item.systemImage)
                         .tag(item)
@@ -24,15 +41,61 @@ struct SidebarView: View {
                 .onMove { source, destination in
                     moveVisibleItems(from: source, to: destination)
                 }
+            } header: {
+                Text("Library")
+                    .font(.app(size: 11, weight: .semibold))
+                    .foregroundStyle(.secondary)
             }
 
-            Section("Playlists") {
-                // Placeholder — will be populated from SwiftData later
-                Label("New Playlist...", systemImage: "plus")
+            Section {
+                ForEach(playlists) { playlist in
+                    Label(playlist.name, systemImage: playlist.isAIGenerated ? "sparkles" : "music.note.list")
+                        .background(
+                            RoundedRectangle(cornerRadius: 4)
+                                .fill(selectedPlaylistID == playlist.persistentModelID
+                                      ? Color.accentColor.opacity(0.15)
+                                      : Color.clear)
+                        )
+                        .contentShape(Rectangle())
+                        .onClicks(single: {
+                            selectedPlaylistID = playlist.persistentModelID
+                            selectedItem = nil
+                        }, double: {
+                            NotificationCenter.default.post(
+                                name: .navigateToPlaylist,
+                                object: nil,
+                                userInfo: ["playlistID": playlist.persistentModelID]
+                            )
+                        })
+                        .contextMenu {
+                            Button("Delete Playlist", role: .destructive) {
+                                deletePlaylist(playlist)
+                            }
+                        }
+                }
+
+                Button {
+                    showNewPlaylistSheet = true
+                } label: {
+                    Label("New Playlist...", systemImage: "plus")
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+            } header: {
+                Text("Playlists")
+                    .font(.app(size: 11, weight: .semibold))
                     .foregroundStyle(.secondary)
             }
         }
+        .sheet(isPresented: $showNewPlaylistSheet) {
+            NewPlaylistSheet(tracks: [])
+        }
         .listStyle(.sidebar)
+        .onChange(of: selectedItem) { _, newItem in
+            if newItem != nil {
+                selectedPlaylistID = nil
+            }
+        }
         .onAppear {
             configuration.mergeDefaults()
         }
@@ -42,6 +105,14 @@ struct SidebarView: View {
     }
 
     // MARK: - Helpers
+
+    private func deletePlaylist(_ playlist: Playlist) {
+        if selectedPlaylistID == playlist.persistentModelID {
+            selectedPlaylistID = nil
+        }
+        modelContext.delete(playlist)
+        try? modelContext.save()
+    }
 
     private func setVisibility(of item: SidebarItem, visible: Bool) {
         guard let index = configuration.entries.firstIndex(where: { $0.item == item }) else { return }

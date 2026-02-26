@@ -21,7 +21,7 @@ struct AlbumCard: View {
                             .scaleEffect(0.8)
                     } else {
                         Image(systemName: "music.note")
-                            .font(.system(size: 30))
+                            .font(.app(size: 30))
                             .foregroundStyle(.secondary)
                     }
                 }
@@ -29,11 +29,11 @@ struct AlbumCard: View {
                 .shadow(color: .black.opacity(0.1), radius: 4, y: 2)
 
             Text(name)
-                .font(.system(size: 13, weight: .medium))
+                .font(.app(size: 13, weight: .medium))
                 .lineLimit(1)
 
             Text(artist)
-                .font(.system(size: 11))
+                .font(.app(size: 11))
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
         }

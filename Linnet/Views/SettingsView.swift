@@ -21,12 +21,42 @@ struct SettingsView: View {
 }
 
 struct GeneralSettingsView: View {
+    @AppStorage("fontSizeOffset") private var fontSizeOffset: Double = 2
+
     var body: some View {
         Form {
-            Text("General settings will appear here.")
-                .foregroundStyle(.secondary)
+            Section("Appearance") {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        Text("Font Size")
+                        Spacer()
+                        Text(fontSizeLabel)
+                            .foregroundStyle(.secondary)
+                    }
+                    Slider(value: $fontSizeOffset, in: -2...6, step: 1) {
+                        Text("Font Size")
+                    }
+                    .labelsHidden()
+                    HStack {
+                        Text("Smaller")
+                            .font(.caption)
+                            .foregroundStyle(.tertiary)
+                        Spacer()
+                        Text("Larger")
+                            .font(.caption)
+                            .foregroundStyle(.tertiary)
+                    }
+                }
+            }
         }
         .padding()
+    }
+
+    private var fontSizeLabel: String {
+        let intOffset = Int(fontSizeOffset)
+        if intOffset == 0 { return "Default" }
+        if intOffset > 0 { return "+\(intOffset)" }
+        return "\(intOffset)"
     }
 }
 

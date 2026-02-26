@@ -14,7 +14,7 @@ struct DropOverlay: ViewModifier {
                     .overlay {
                         VStack(spacing: 8) {
                             Image(systemName: "plus.circle.fill")
-                                .font(.system(size: 40))
+                                .font(.app(size: 40))
                                 .foregroundStyle(.tint)
                             Text("Drop to add to library")
                                 .font(.headline)

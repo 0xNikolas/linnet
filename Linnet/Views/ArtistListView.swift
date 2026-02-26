@@ -93,9 +93,9 @@ private struct ArtistRow: View {
 
             VStack(alignment: .leading) {
                 Text(artist.name)
-                    .font(.system(size: 14))
+                    .font(.app(size: 14))
                 Text("\(artist.albums.count) albums")
-                    .font(.system(size: 12))
+                    .font(.app(size: 12))
                     .foregroundStyle(.secondary)
             }
         }

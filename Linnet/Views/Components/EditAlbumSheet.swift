@@ -31,7 +31,7 @@ struct EditAlbumSheet: View {
                                     .scaledToFill()
                             } else {
                                 Image(systemName: "music.note")
-                                    .font(.system(size: 30))
+                                    .font(.app(size: 30))
                                     .foregroundStyle(.secondary)
                             }
                         }

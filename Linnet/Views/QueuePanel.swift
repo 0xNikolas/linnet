@@ -47,6 +47,17 @@ struct QueuePanel: View {
                                         player.playFromQueue(at: index)
                                     }
                                     Divider()
+                                    if let artist = track.artist {
+                                        Button("Go to Artist") {
+                                            NotificationCenter.default.post(name: .navigateToArtist, object: nil, userInfo: ["artist": artist])
+                                        }
+                                    }
+                                    if let album = track.album {
+                                        Button("Go to Album") {
+                                            NotificationCenter.default.post(name: .navigateToAlbum, object: nil, userInfo: ["album": album])
+                                        }
+                                    }
+                                    Divider()
                                     Button("Remove from Queue", role: .destructive) {
                                         player.removeFromQueue(at: IndexSet(integer: index))
                                     }
@@ -89,9 +100,9 @@ struct QueuePanel: View {
 
             VStack(alignment: .leading) {
                 Text(title)
-                    .font(.system(size: 13, weight: isCurrent ? .semibold : .regular))
+                    .font(.app(size: 13, weight: isCurrent ? .semibold : .regular))
                 Text(artist)
-                    .font(.system(size: 11))
+                    .font(.app(size: 11))
                     .foregroundStyle(.secondary)
             }
             Spacer()

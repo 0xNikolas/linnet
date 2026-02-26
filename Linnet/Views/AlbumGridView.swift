@@ -116,6 +116,12 @@ private struct AlbumGridItem: View {
             }
             LikeDislikeMenu(tracks: album.tracks)
             Divider()
+            if let artist = album.artist {
+                Button("Go to Artist") {
+                    NotificationCenter.default.post(name: .navigateToArtist, object: nil, userInfo: ["artist": artist])
+                }
+            }
+            Divider()
             Button("Edit Album...") { showEditSheet = true }
             Divider()
             Button("Remove from Library", role: .destructive) { onRemove() }

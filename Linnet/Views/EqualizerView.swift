@@ -67,7 +67,7 @@ private struct BandSlider: View {
         VStack(spacing: 4) {
             // dB value
             Text(gainText)
-                .font(.system(size: 9, design: .monospaced))
+                .font(.app(size: 9, design: .monospaced))
                 .foregroundStyle(isEnabled ? .primary : .secondary)
                 .frame(height: 14)
 
@@ -104,7 +104,7 @@ private struct BandSlider: View {
 
             // Frequency label
             Text(band.label)
-                .font(.system(size: 9))
+                .font(.app(size: 9))
                 .foregroundStyle(.secondary)
                 .frame(height: 14)
         }

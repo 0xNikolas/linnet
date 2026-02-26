@@ -46,10 +46,10 @@ struct NewPlaylistSheet: View {
                         HStack {
                             VStack(alignment: .leading) {
                                 Text(track.title)
-                                    .font(.system(size: 13))
+                                    .font(.app(size: 13))
                                     .lineLimit(1)
                                 Text(track.artist?.name ?? "Unknown Artist")
-                                    .font(.system(size: 11))
+                                    .font(.app(size: 11))
                                     .foregroundStyle(.secondary)
                                     .lineLimit(1)
                             }

@@ -2,46 +2,36 @@ import SwiftUI
 import SwiftData
 
 struct ContentArea: View {
-    let tab: NavigationTab
     let sidebarItem: SidebarItem?
     @Binding var highlightedTrackID: PersistentIdentifier?
     @AppStorage("nowPlayingBarHeight") private var barHeight: Double = 56
 
     var body: some View {
         Group {
-            switch tab {
-            case .listenNow:
-                ListenNowView()
-
-            case .browse:
-                if let item = sidebarItem {
-                    switch item {
-                    case .albums:
-                        AlbumGridView()
-                    case .artists:
-                        ArtistListView()
-                    case .songs:
-                        SongsGroupingView(highlightedTrackID: $highlightedTrackID)
-                    case .likedSongs:
-                        LikedSongsView(highlightedTrackID: $highlightedTrackID)
-                    case .folders:
-                        FolderBrowserView()
-                    case .recentlyAdded:
-                        AlbumGridView()
-                    case .playlist(let name):
-                        Text(name)
-                            .font(.largeTitle.bold())
-                    }
-                } else {
-                    Text("Select an item")
-                        .foregroundStyle(.secondary)
+            if let item = sidebarItem {
+                switch item {
+                case .listenNow:
+                    ListenNowView()
+                case .ai:
+                    AIChatView()
+                case .albums:
+                    AlbumGridView()
+                case .artists:
+                    ArtistListView()
+                case .songs:
+                    SongsGroupingView(highlightedTrackID: $highlightedTrackID)
+                case .likedSongs:
+                    LikedSongsView(highlightedTrackID: $highlightedTrackID)
+                case .folders:
+                    FolderBrowserView()
+                case .recentlyAdded:
+                    AlbumGridView()
+                case .playlist:
+                    PlaylistsView()
                 }
-
-            case .playlists:
-                PlaylistsView()
-
-            case .ai:
-                AIChatView()
+            } else {
+                Text("Select an item")
+                    .foregroundStyle(.secondary)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)

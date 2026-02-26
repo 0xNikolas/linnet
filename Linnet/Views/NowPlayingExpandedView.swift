@@ -20,7 +20,7 @@ struct NowPlayingExpandedView: View {
                             .scaledToFill()
                     } else {
                         Image(systemName: "music.note")
-                            .font(.system(size: 60))
+                            .font(.app(size: 60))
                             .foregroundStyle(.secondary)
                     }
                 }
@@ -42,11 +42,11 @@ struct NowPlayingExpandedView: View {
                     .frame(width: 300)
                 HStack {
                     Text(player.formatTime(player.currentTime))
-                        .font(.system(size: 11, design: .monospaced))
+                        .font(.app(size: 11, design: .monospaced))
                         .foregroundStyle(.secondary)
                     Spacer()
                     Text(player.formatTime(player.duration))
-                        .font(.system(size: 11, design: .monospaced))
+                        .font(.app(size: 11, design: .monospaced))
                         .foregroundStyle(.secondary)
                 }
                 .frame(width: 300)
@@ -56,32 +56,32 @@ struct NowPlayingExpandedView: View {
             HStack(spacing: 32) {
                 Button(action: {}) {
                     Image(systemName: "shuffle")
-                        .font(.system(size: 16))
+                        .font(.app(size: 16))
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(.secondary)
 
                 Button(action: { player.previous() }) {
                     Image(systemName: "backward.fill")
-                        .font(.system(size: 20))
+                        .font(.app(size: 20))
                 }
                 .buttonStyle(.plain)
 
                 Button(action: { player.togglePlayPause() }) {
                     Image(systemName: player.isPlaying ? "pause.circle.fill" : "play.circle.fill")
-                        .font(.system(size: 44))
+                        .font(.app(size: 44))
                 }
                 .buttonStyle(.plain)
 
                 Button(action: { player.next() }) {
                     Image(systemName: "forward.fill")
-                        .font(.system(size: 20))
+                        .font(.app(size: 20))
                 }
                 .buttonStyle(.plain)
 
                 Button(action: {}) {
                     Image(systemName: "repeat")
-                        .font(.system(size: 16))
+                        .font(.app(size: 16))
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(.secondary)
@@ -90,12 +90,12 @@ struct NowPlayingExpandedView: View {
             // Volume
             HStack(spacing: 8) {
                 Image(systemName: "speaker.fill")
-                    .font(.system(size: 12))
+                    .font(.app(size: 12))
                     .foregroundStyle(.secondary)
                 Slider(value: $player.volume, in: 0...1)
                     .frame(width: 200)
                 Image(systemName: "speaker.wave.3.fill")
-                    .font(.system(size: 12))
+                    .font(.app(size: 12))
                     .foregroundStyle(.secondary)
             }
         }

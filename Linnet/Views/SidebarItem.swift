@@ -1,6 +1,8 @@
 import SwiftUI
 
 enum SidebarItem: Hashable, Codable {
+    case listenNow
+    case ai
     case recentlyAdded
     case artists
     case albums
@@ -16,6 +18,8 @@ enum SidebarItem: Hashable, Codable {
 
     var label: String {
         switch self {
+        case .listenNow: return "Listen Now"
+        case .ai: return "AI"
         case .recentlyAdded: return "Recently Added"
         case .artists: return "Artists"
         case .albums: return "Albums"
@@ -28,6 +32,8 @@ enum SidebarItem: Hashable, Codable {
 
     var systemImage: String {
         switch self {
+        case .listenNow: return "play.circle"
+        case .ai: return "sparkles"
         case .recentlyAdded: return "clock"
         case .artists: return "music.mic"
         case .albums: return "square.stack"

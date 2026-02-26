@@ -8,6 +8,11 @@ struct LinnetApp: App {
     @State private var artworkService = ArtworkService()
     @AppStorage("acoustIDAPIKey") private var acoustIDKey = ""
     @AppStorage("fanartTVAPIKey") private var fanartTVKey = ""
+    @AppStorage("fontSizeOffset") private var fontSizeOffset: Double = 2
+
+    init() {
+        UserDefaults.standard.register(defaults: ["fontSizeOffset": 2.0])
+    }
 
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([Track.self, Album.self, Artist.self, Playlist.self, PlaylistEntry.self, WatchedFolder.self])
@@ -22,6 +27,7 @@ struct LinnetApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .id(fontSizeOffset)
                 .environment(playerViewModel)
                 .environment(artworkService)
                 .onAppear {

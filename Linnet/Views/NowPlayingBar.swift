@@ -8,6 +8,9 @@ extension Notification.Name {
     static let openSettings = Notification.Name("openSettings")
     static let toggleQueueSidePane = Notification.Name("toggleQueueSidePane")
     static let registerBreadcrumb = Notification.Name("registerBreadcrumb")
+    static let navigateToArtist = Notification.Name("navigateToArtist")
+    static let navigateToAlbum = Notification.Name("navigateToAlbum")
+    static let navigateToPlaylist = Notification.Name("navigateToPlaylist")
 }
 
 struct NowPlayingBar: View {
@@ -62,7 +65,7 @@ struct NowPlayingBar: View {
                 // Track info — clickable
                 VStack(alignment: .leading, spacing: 2) {
                     Text(player.currentTrackTitle)
-                        .font(.system(size: titleFontSize, weight: .medium))
+                        .font(.app(size: titleFontSize, weight: .medium))
                         .lineLimit(1)
                         .onTapGesture {
                             guard player.currentQueueTrack != nil else { return }
@@ -77,12 +80,12 @@ struct NowPlayingBar: View {
                         }
                     if let error = player.errorMessage {
                         Text(error)
-                            .font(.system(size: subtitleFontSize))
+                            .font(.app(size: subtitleFontSize))
                             .foregroundStyle(.red)
                             .lineLimit(1)
                     } else {
                         Text(player.currentTrackArtist)
-                            .font(.system(size: subtitleFontSize))
+                            .font(.app(size: subtitleFontSize))
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
                             .onTapGesture {
@@ -103,7 +106,7 @@ struct NowPlayingBar: View {
                 HStack(spacing: 8) {
                     Button(action: { player.toggleDislike() }) {
                         Image(systemName: player.currentQueueTrack?.likedStatus == -1 ? "hand.thumbsdown.fill" : "hand.thumbsdown")
-                            .font(.system(size: 14))
+                            .font(.app(size: 14))
                             .foregroundStyle(player.currentQueueTrack?.likedStatus == -1 ? .red : .secondary)
                     }
                     .buttonStyle(.plain)
@@ -111,7 +114,7 @@ struct NowPlayingBar: View {
 
                     Button(action: { player.toggleLike() }) {
                         Image(systemName: player.currentQueueTrack?.likedStatus == 1 ? "hand.thumbsup.fill" : "hand.thumbsup")
-                            .font(.system(size: 14))
+                            .font(.app(size: 14))
                             .foregroundColor(player.currentQueueTrack?.likedStatus == 1 ? .accentColor : .secondary)
                     }
                     .buttonStyle(.plain)
@@ -124,7 +127,7 @@ struct NowPlayingBar: View {
                 HStack(spacing: 24) {
                     Button(action: { player.previous() }) {
                         Image(systemName: "backward.fill")
-                            .font(.system(size: controlSize))
+                            .font(.app(size: controlSize))
                             .frame(width: 32, height: 32)
                             .contentShape(Rectangle())
                     }
@@ -132,7 +135,7 @@ struct NowPlayingBar: View {
 
                     Button(action: { player.togglePlayPause() }) {
                         Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
-                            .font(.system(size: playPauseSize))
+                            .font(.app(size: playPauseSize))
                             .frame(width: 36, height: 36)
                             .contentShape(Rectangle())
                     }
@@ -140,7 +143,7 @@ struct NowPlayingBar: View {
 
                     Button(action: { player.next() }) {
                         Image(systemName: "forward.fill")
-                            .font(.system(size: controlSize))
+                            .font(.app(size: controlSize))
                             .frame(width: 32, height: 32)
                             .contentShape(Rectangle())
                     }
@@ -148,7 +151,7 @@ struct NowPlayingBar: View {
 
                     Button(action: { player.toggleRepeatMode() }) {
                         Image(systemName: player.repeatMode == .one ? "repeat.1" : "repeat")
-                            .font(.system(size: controlSize - 4))
+                            .font(.app(size: controlSize - 4))
                             .foregroundColor(player.repeatMode == .off ? .primary : .accentColor)
                             .frame(width: 32, height: 32)
                             .contentShape(Rectangle())
@@ -169,33 +172,33 @@ struct NowPlayingBar: View {
                 // Progress
                 HStack(spacing: 8) {
                     Text(player.formatTime(player.currentTime))
-                        .font(.system(size: 11, design: .monospaced))
+                        .font(.app(size: 11, design: .monospaced))
                         .foregroundStyle(.secondary)
 
                     Slider(value: $player.progress)
                         .frame(width: 200)
 
                     Text(player.formatTime(player.duration))
-                        .font(.system(size: 11, design: .monospaced))
+                        .font(.app(size: 11, design: .monospaced))
                         .foregroundStyle(.secondary)
                 }
 
                 // Volume
                 HStack(spacing: 4) {
                     Image(systemName: "speaker.fill")
-                        .font(.system(size: 10))
+                        .font(.app(size: 10))
                         .foregroundStyle(.secondary)
                     Slider(value: $player.volume, in: 0...1)
                         .frame(width: 80)
                     Image(systemName: "speaker.wave.3.fill")
-                        .font(.system(size: 10))
+                        .font(.app(size: 10))
                         .foregroundStyle(.secondary)
                 }
 
                 // EQ button
                 Button(action: { showEqualizer.toggle() }) {
                     Image(systemName: "slider.vertical.3")
-                        .font(.system(size: 14))
+                        .font(.app(size: 14))
                         .foregroundColor(player.eqEnabled ? .accentColor : .primary)
                         .overlay(alignment: .topTrailing) {
                             if player.eqEnabled {
@@ -214,7 +217,7 @@ struct NowPlayingBar: View {
                 // Queue popover button
                 Button(action: { showQueue.toggle() }) {
                     Image(systemName: "list.bullet")
-                        .font(.system(size: 14))
+                        .font(.app(size: 14))
                         .foregroundColor(showQueue ? .accentColor : .primary)
                 }
                 .buttonStyle(.plain)
@@ -227,7 +230,7 @@ struct NowPlayingBar: View {
                     NotificationCenter.default.post(name: .toggleQueueSidePane, object: nil)
                 }) {
                     Image(systemName: "sidebar.trailing")
-                        .font(.system(size: 14))
+                        .font(.app(size: 14))
                 }
                 .buttonStyle(.plain)
             }

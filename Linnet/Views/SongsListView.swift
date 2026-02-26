@@ -208,7 +208,7 @@ private struct SongsTableView: View {
                         }
                     } header: {
                         Text(section.id)
-                            .font(.system(size: 14, weight: .bold))
+                            .font(.app(size: 14, weight: .bold))
                             .foregroundStyle(.primary)
                             .padding(.bottom, 4)
                             .toolTip(section.tooltip)
@@ -232,7 +232,7 @@ private struct SongsTableView: View {
     private var coreColumns: some TableColumnContent<Track, KeyPathComparator<Track>> {
         TableColumn("#", value: \.trackNumber) { track in
             Text("\(track.trackNumber)")
-                .font(.system(size: 13))
+                .font(.app(size: 13))
                 .foregroundStyle(.secondary)
         }
         .width(min: 30, ideal: 40, max: 60)
@@ -241,10 +241,10 @@ private struct SongsTableView: View {
         TableColumn("Title", value: \.title) { track in
             HStack(spacing: 4) {
                 Text(track.title)
-                    .font(.system(size: 13))
+                    .font(.app(size: 13))
                 if track.likedStatus == 1 {
                     Image(systemName: "heart.fill")
-                        .font(.system(size: 9))
+                        .font(.app(size: 9))
                         .foregroundStyle(.red)
                 }
             }
@@ -255,7 +255,7 @@ private struct SongsTableView: View {
 
         TableColumn("Artist") { track in
             Text(artistNames[track.id] ?? "Unknown")
-                .font(.system(size: 13))
+                .font(.app(size: 13))
                 .foregroundStyle(.secondary)
         }
         .width(min: 80, ideal: 150)
@@ -263,7 +263,7 @@ private struct SongsTableView: View {
 
         TableColumn("Album") { track in
             Text(albumNames[track.id] ?? "Unknown")
-                .font(.system(size: 13))
+                .font(.app(size: 13))
                 .foregroundStyle(.secondary)
         }
         .width(min: 80, ideal: 150)
@@ -271,7 +271,7 @@ private struct SongsTableView: View {
 
         TableColumn("Time", value: \.duration) { track in
             Text(formatTime(track.duration))
-                .font(.system(size: 13, design: .monospaced))
+                .font(.app(size: 13, design: .monospaced))
                 .foregroundStyle(.secondary)
         }
         .width(min: 40, ideal: 55, max: 80)
@@ -282,7 +282,7 @@ private struct SongsTableView: View {
     private var metadataColumns: some TableColumnContent<Track, KeyPathComparator<Track>> {
         TableColumn("Genre") { track in
             Text(track.genre ?? "")
-                .font(.system(size: 13))
+                .font(.app(size: 13))
                 .foregroundStyle(.secondary)
         }
         .width(min: 60, ideal: 100)
@@ -291,7 +291,7 @@ private struct SongsTableView: View {
 
         TableColumn("Year") { track in
             Text(track.year.map { "\($0)" } ?? "")
-                .font(.system(size: 13))
+                .font(.app(size: 13))
                 .foregroundStyle(.secondary)
         }
         .width(min: 40, ideal: 60, max: 80)
@@ -300,7 +300,7 @@ private struct SongsTableView: View {
 
         TableColumn("Plays") { track in
             Text("\(track.playCount)")
-                .font(.system(size: 13))
+                .font(.app(size: 13))
                 .foregroundStyle(.secondary)
         }
         .width(min: 40, ideal: 50, max: 70)
@@ -312,7 +312,7 @@ private struct SongsTableView: View {
     private var audioColumns: some TableColumnContent<Track, KeyPathComparator<Track>> {
         TableColumn("Format") { track in
             Text(track.codec ?? "")
-                .font(.system(size: 13))
+                .font(.app(size: 13))
                 .foregroundStyle(.secondary)
         }
         .width(min: 40, ideal: 60, max: 80)
@@ -321,7 +321,7 @@ private struct SongsTableView: View {
 
         TableColumn("Bitrate") { track in
             Text(track.bitrate.map { "\($0) kbps" } ?? "")
-                .font(.system(size: 13))
+                .font(.app(size: 13))
                 .foregroundStyle(.secondary)
         }
         .width(min: 50, ideal: 80, max: 100)
@@ -330,7 +330,7 @@ private struct SongsTableView: View {
 
         TableColumn("Sample Rate") { track in
             Text(track.sampleRate.map { formatSampleRate($0) } ?? "")
-                .font(.system(size: 13))
+                .font(.app(size: 13))
                 .foregroundStyle(.secondary)
         }
         .width(min: 50, ideal: 80, max: 100)
@@ -339,7 +339,7 @@ private struct SongsTableView: View {
 
         TableColumn("Channels") { track in
             Text(track.channels.map { channelLabel($0) } ?? "")
-                .font(.system(size: 13))
+                .font(.app(size: 13))
                 .foregroundStyle(.secondary)
         }
         .width(min: 40, ideal: 60, max: 80)
@@ -348,7 +348,7 @@ private struct SongsTableView: View {
 
         TableColumn("Size") { track in
             Text(track.fileSize.map { formatFileSize($0) } ?? "")
-                .font(.system(size: 13))
+                .font(.app(size: 13))
                 .foregroundStyle(.secondary)
         }
         .width(min: 40, ideal: 70, max: 90)
@@ -391,6 +391,17 @@ private struct SongsTableView: View {
             }
             AddToPlaylistMenu(tracks: [track])
             LikeDislikeMenu(tracks: [track])
+            Divider()
+            if let artist = track.artist {
+                Button("Go to Artist") {
+                    NotificationCenter.default.post(name: .navigateToArtist, object: nil, userInfo: ["artist": artist])
+                }
+            }
+            if let album = track.album {
+                Button("Go to Album") {
+                    NotificationCenter.default.post(name: .navigateToAlbum, object: nil, userInfo: ["album": album])
+                }
+            }
             Divider()
             Button("Remove from Library", role: .destructive) {
                 onRemove(ids)

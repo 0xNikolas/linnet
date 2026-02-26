@@ -4,7 +4,9 @@ import LinnetLibrary
 
 struct PlaylistsView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.navigationPath) private var navigationPath
     @Query(sort: \Playlist.createdAt) private var playlists: [Playlist]
+    @State private var selectedPlaylistID: PersistentIdentifier?
     @State private var searchText = ""
     @State private var isSearchPresented = false
 
@@ -37,7 +39,7 @@ struct PlaylistsView: View {
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                List(filteredPlaylists) { playlist in
+                List(filteredPlaylists, id: \.persistentModelID, selection: $selectedPlaylistID) { playlist in
                     HStack(spacing: 12) {
                         RoundedRectangle(cornerRadius: 4)
                             .fill(.quaternary)
@@ -49,14 +51,23 @@ struct PlaylistsView: View {
 
                         VStack(alignment: .leading) {
                             Text(playlist.name)
-                                .font(.system(size: 14))
+                                .font(.app(size: 14))
                             Text("\(playlist.entries.count) songs")
-                                .font(.system(size: 12))
+                                .font(.app(size: 12))
                                 .foregroundStyle(.secondary)
                         }
                     }
                     .padding(.vertical, 4)
+                    .contextMenu {
+                        Button("Delete Playlist", role: .destructive) {
+                            deletePlaylist(playlist)
+                        }
+                    }
                 }
+                .contextMenu(forSelectionType: PersistentIdentifier.self, menu: { _ in }, primaryAction: { identifiers in
+                    guard let id = identifiers.first else { return }
+                    navigationPath.wrappedValue.append(id)
+                })
             }
         }
         .searchable(text: $searchText, isPresented: $isSearchPresented, prompt: "Search playlists...")
@@ -68,6 +79,11 @@ struct PlaylistsView: View {
     private func createPlaylist() {
         let playlist = Playlist(name: "New Playlist")
         modelContext.insert(playlist)
+        try? modelContext.save()
+    }
+
+    private func deletePlaylist(_ playlist: Playlist) {
+        modelContext.delete(playlist)
         try? modelContext.save()
     }
 }
