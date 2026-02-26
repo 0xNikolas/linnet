@@ -6,6 +6,7 @@ extension Notification.Name {
     static let highlightTrackInDetail = Notification.Name("highlightTrackInDetail")
     static let focusSearch = Notification.Name("focusSearch")
     static let openSettings = Notification.Name("openSettings")
+    static let toggleQueueSidePane = Notification.Name("toggleQueueSidePane")
 }
 
 struct NowPlayingBar: View {
@@ -209,7 +210,7 @@ struct NowPlayingBar: View {
                     EqualizerView()
                 }
 
-                // Queue button
+                // Queue popover button
                 Button(action: { showQueue.toggle() }) {
                     Image(systemName: "list.bullet")
                         .font(.system(size: 14))
@@ -219,6 +220,15 @@ struct NowPlayingBar: View {
                 .popover(isPresented: $showQueue, arrowEdge: .top) {
                     QueuePanel(isShowing: $showQueue)
                 }
+
+                // Queue side pane toggle
+                Button(action: {
+                    NotificationCenter.default.post(name: .toggleQueueSidePane, object: nil)
+                }) {
+                    Image(systemName: "sidebar.trailing")
+                        .font(.system(size: 14))
+                }
+                .buttonStyle(.plain)
             }
             .padding(.horizontal, 16)
             .frame(height: barHeight)

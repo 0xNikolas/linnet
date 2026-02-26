@@ -9,24 +9,32 @@ struct ContentView: View {
     @State private var isDropTargeted = false
     @State private var navigationPath = NavigationPath()
     @State private var highlightedTrackID: PersistentIdentifier?
+    @AppStorage("showQueueSidePane") private var showQueueSidePane = false
 
     var body: some View {
         NavigationSplitView {
             SidebarView(selectedItem: $selectedSidebarItem)
         } detail: {
-            NavigationStack(path: $navigationPath) {
-                ContentArea(tab: selectedTab, sidebarItem: selectedSidebarItem, highlightedTrackID: $highlightedTrackID)
-                    .navigationDestination(for: Album.self) { album in
-                        let _ = Log.navigation.debug("Pushing AlbumDetailView: \(album.name)")
-                        AlbumDetailView(album: album)
-                    }
-                    .navigationDestination(for: Artist.self) { artist in
-                        let _ = Log.navigation.debug("Pushing ArtistDetailView: \(artist.name)")
-                        ArtistDetailView(artist: artist, navigationPath: $navigationPath)
-                    }
+            HStack(spacing: 0) {
+                NavigationStack(path: $navigationPath) {
+                    ContentArea(tab: selectedTab, sidebarItem: selectedSidebarItem, highlightedTrackID: $highlightedTrackID)
+                        .navigationDestination(for: Album.self) { album in
+                            let _ = Log.navigation.debug("Pushing AlbumDetailView: \(album.name)")
+                            AlbumDetailView(album: album)
+                        }
+                        .navigationDestination(for: Artist.self) { artist in
+                            let _ = Log.navigation.debug("Pushing ArtistDetailView: \(artist.name)")
+                            ArtistDetailView(artist: artist, navigationPath: $navigationPath)
+                        }
+                }
+                .id("\(selectedTab)-\(selectedSidebarItem.map { "\($0)" } ?? "none")")
+                .environment(\.navigationPath, $navigationPath)
+
+                if showQueueSidePane {
+                    Divider()
+                    QueuePanel(isShowing: $showQueueSidePane)
+                }
             }
-            .id("\(selectedTab)-\(selectedSidebarItem.map { "\($0)" } ?? "none")")
-            .environment(\.navigationPath, $navigationPath)
         }
         .safeAreaInset(edge: .bottom) {
             NowPlayingBar()
@@ -84,6 +92,9 @@ struct ContentView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .openSettings)) { _ in
             NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .toggleQueueSidePane)) { _ in
+            showQueueSidePane.toggle()
         }
         .frame(minWidth: 900, minHeight: 600)
         .dropDestination(for: URL.self) { urls, _ in
