@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		02A20644739394633344B84D /* NewPlaylistSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = EBF20F59753983BB122F42C5 /* NewPlaylistSheet.swift */; };
 		03596010F423C73F163251BB /* SongsListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A95E88F55B51D9A88F54041B /* SongsListView.swift */; };
 		0420887A74B9EC6B43A60BB4 /* Log.swift in Sources */ = {isa = PBXBuildFile; fileRef = D8F8CEB0E1F833051B91E558 /* Log.swift */; };
 		05D9C4016E079AB4134EEB99 /* LinnetApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E9159929F26EB66FA7D7AA6 /* LinnetApp.swift */; };
@@ -93,6 +94,7 @@
 		DBC583B5B9F1D851C2DFD2C8 /* PlayerViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerViewModel.swift; sourceTree = "<group>"; };
 		DE081717B9CA475B933CC880 /* LibraryViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryViewModel.swift; sourceTree = "<group>"; };
 		E1BAFBCED6C012BFDA7E0BDD /* DoubleClickModifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DoubleClickModifier.swift; sourceTree = "<group>"; };
+		EBF20F59753983BB122F42C5 /* NewPlaylistSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewPlaylistSheet.swift; sourceTree = "<group>"; };
 		ED542F67A15119F496E0341B /* EqualizerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EqualizerView.swift; sourceTree = "<group>"; };
 		F2B2913F2EE055D3AB16E9C2 /* NowPlayingBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NowPlayingBar.swift; sourceTree = "<group>"; };
 		F8073F95DBD83F791B887E8E /* ArtistListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArtistListView.swift; sourceTree = "<group>"; };
@@ -199,6 +201,7 @@
 				048095534A52645B1F06DA0E /* ListenNowView.swift */,
 				B769C428A5BC782D03A9EA32 /* NavigationPathKey.swift */,
 				9C95B13271489547FF8D38F0 /* NavigationTab.swift */,
+				EBF20F59753983BB122F42C5 /* NewPlaylistSheet.swift */,
 				F2B2913F2EE055D3AB16E9C2 /* NowPlayingBar.swift */,
 				5BAD760FAB7201DA1C298A6F /* NowPlayingExpandedView.swift */,
 				FE606449785815BE32B3C7F1 /* PlaylistDetailView.swift */,
@@ -336,6 +339,7 @@
 				0420887A74B9EC6B43A60BB4 /* Log.swift in Sources */,
 				6D154FF89B4FB3CC30132EBB /* NavigationPathKey.swift in Sources */,
 				1B3B70E1E540AB8EF6318F90 /* NavigationTab.swift in Sources */,
+				02A20644739394633344B84D /* NewPlaylistSheet.swift in Sources */,
 				CAFFE40870C06CE9A4E45A1C /* NowPlayingBar.swift in Sources */,
 				227D1AE9D5962E029D7EE853 /* NowPlayingExpandedView.swift in Sources */,
 				205C7DC88740CC31AA2DBC1D /* PlayerViewModel.swift in Sources */,

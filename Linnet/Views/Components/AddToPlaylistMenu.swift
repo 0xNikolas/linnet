@@ -7,6 +7,7 @@ struct AddToPlaylistMenu: View {
 
     @Query(sort: \Playlist.name) private var playlists: [Playlist]
     @Environment(\.modelContext) private var modelContext
+    @State private var showNewPlaylistSheet = false
 
     var body: some View {
         Menu("Add to Playlist") {
@@ -17,11 +18,14 @@ struct AddToPlaylistMenu: View {
             }
             if !playlists.isEmpty { Divider() }
             Button("New Playlist...") {
-                let playlist = Playlist(name: "New Playlist")
-                modelContext.insert(playlist)
-                addTracks(to: playlist)
-                try? modelContext.save()
+                showNewPlaylistSheet = true
             }
+        }
+        .background {
+            Color.clear
+                .sheet(isPresented: $showNewPlaylistSheet) {
+                    NewPlaylistSheet(tracks: tracks)
+                }
         }
     }
 
