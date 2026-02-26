@@ -143,6 +143,23 @@ struct NowPlayingBar: View {
                             .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
+
+                    Button(action: { player.toggleRepeatMode() }) {
+                        Image(systemName: player.repeatMode == .one ? "repeat.1" : "repeat")
+                            .font(.system(size: controlSize - 4))
+                            .foregroundColor(player.repeatMode == .off ? .primary : .accentColor)
+                            .frame(width: 32, height: 32)
+                            .contentShape(Rectangle())
+                            .overlay(alignment: .bottom) {
+                                if player.repeatMode != .off {
+                                    Circle()
+                                        .fill(Color.accentColor)
+                                        .frame(width: 4, height: 4)
+                                        .offset(y: 2)
+                                }
+                            }
+                    }
+                    .buttonStyle(.plain)
                 }
 
                 Spacer()

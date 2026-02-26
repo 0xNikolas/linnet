@@ -183,6 +183,18 @@ public final class PlayerViewModel {
         queuedTracks = currentTrack.map { [$0] } ?? []
     }
 
+    var repeatMode: RepeatMode {
+        queue.repeatMode
+    }
+
+    func toggleRepeatMode() {
+        switch queue.repeatMode {
+        case .off: queue.repeatMode = .all
+        case .all: queue.repeatMode = .one
+        case .one: queue.repeatMode = .off
+        }
+    }
+
     func toggleLike() {
         guard let track = currentQueueTrack else { return }
         track.likedStatus = track.likedStatus == 1 ? 0 : 1
