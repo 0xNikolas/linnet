@@ -7,8 +7,10 @@ struct SidebarView: View {
     @AppStorage("sidebarConfiguration") private var configuration: SidebarConfiguration = .default
     @State private var showEditSheet = false
     @State private var showNewPlaylistSheet = false
-    @State private var selectedPlaylistID: PersistentIdentifier?
+    @State private var renamingPlaylist: Playlist?
+    @State private var renameText = ""
     @Environment(\.modelContext) private var modelContext
+    @Environment(PlayerViewModel.self) private var player
     @Query(sort: \Playlist.createdAt) private var playlists: [Playlist]
 
     var body: some View {
@@ -50,24 +52,52 @@ struct SidebarView: View {
             Section {
                 ForEach(playlists) { playlist in
                     Label(playlist.name, systemImage: playlist.isAIGenerated ? "sparkles" : "music.note.list")
-                        .background(
-                            RoundedRectangle(cornerRadius: 4)
-                                .fill(selectedPlaylistID == playlist.persistentModelID
-                                      ? Color.accentColor.opacity(0.15)
-                                      : Color.clear)
-                        )
+                        .tag(SidebarItem.playlist(playlist.persistentModelID.hashValue.description))
                         .contentShape(Rectangle())
-                        .onClicks(single: {
-                            selectedPlaylistID = playlist.persistentModelID
+                        .onTapGesture {
                             selectedItem = nil
-                        }, double: {
                             NotificationCenter.default.post(
                                 name: .navigateToPlaylist,
                                 object: nil,
                                 userInfo: ["playlistID": playlist.persistentModelID]
                             )
-                        })
+                        }
                         .contextMenu {
+                            let tracks = playlist.entries.sorted { $0.order < $1.order }.map(\.track)
+
+                            Button("Play") {
+                                guard let first = tracks.first else { return }
+                                player.playTrack(first, queue: tracks)
+                            }
+                            .disabled(tracks.isEmpty)
+
+                            Button("Play Next") {
+                                for track in tracks.reversed() {
+                                    player.addNext(track)
+                                }
+                            }
+                            .disabled(tracks.isEmpty)
+
+                            Button("Play Later") {
+                                for track in tracks {
+                                    player.addLater(track)
+                                }
+                            }
+                            .disabled(tracks.isEmpty)
+
+                            Divider()
+
+                            Button("Rename...") {
+                                renameText = playlist.name
+                                renamingPlaylist = playlist
+                            }
+
+                            Button("Duplicate") {
+                                duplicatePlaylist(playlist)
+                            }
+
+                            Divider()
+
                             Button("Delete Playlist", role: .destructive) {
                                 deletePlaylist(playlist)
                             }
@@ -91,26 +121,43 @@ struct SidebarView: View {
             NewPlaylistSheet(tracks: [])
         }
         .listStyle(.sidebar)
-        .onChange(of: selectedItem) { _, newItem in
-            if newItem != nil {
-                selectedPlaylistID = nil
-            }
-        }
         .onAppear {
             configuration.mergeDefaults()
         }
         .sheet(isPresented: $showEditSheet) {
             EditSidebarSheet(configuration: $configuration)
         }
+        .alert("Rename Playlist", isPresented: Binding(
+            get: { renamingPlaylist != nil },
+            set: { if !$0 { renamingPlaylist = nil } }
+        )) {
+            TextField("Name", text: $renameText)
+            Button("Cancel", role: .cancel) { renamingPlaylist = nil }
+            Button("Rename") {
+                if let playlist = renamingPlaylist, !renameText.trimmingCharacters(in: .whitespaces).isEmpty {
+                    playlist.name = renameText.trimmingCharacters(in: .whitespaces)
+                    try? modelContext.save()
+                }
+                renamingPlaylist = nil
+            }
+        }
     }
 
     // MARK: - Helpers
 
     private func deletePlaylist(_ playlist: Playlist) {
-        if selectedPlaylistID == playlist.persistentModelID {
-            selectedPlaylistID = nil
-        }
         modelContext.delete(playlist)
+        try? modelContext.save()
+    }
+
+    private func duplicatePlaylist(_ playlist: Playlist) {
+        let copy = Playlist(name: "\(playlist.name) Copy", isAIGenerated: playlist.isAIGenerated)
+        modelContext.insert(copy)
+        for entry in playlist.entries.sorted(by: { $0.order < $1.order }) {
+            let newEntry = PlaylistEntry(track: entry.track, order: entry.order)
+            newEntry.playlist = copy
+            modelContext.insert(newEntry)
+        }
         try? modelContext.save()
     }
 
