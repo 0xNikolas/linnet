@@ -5,43 +5,41 @@ struct BreadcrumbItem: Hashable {
     let level: Int
 }
 
-struct BreadcrumbBar: View {
-    let items: [BreadcrumbItem]
-    let onNavigate: (Int) -> Void
+struct NavigationBar: View {
+    let breadcrumbs: [BreadcrumbItem]
+    let onHome: () -> Void
+    let onBack: () -> Void
+
+    private var previousItem: BreadcrumbItem? {
+        guard breadcrumbs.count >= 2 else { return nil }
+        return breadcrumbs[breadcrumbs.count - 2]
+    }
 
     var body: some View {
-        HStack(spacing: 4) {
-            let lastLevel = items.last?.level ?? 0
-            forEachItem(items) { item in
-                if item.level > 0 {
-                    Image(systemName: "chevron.right")
-                        .font(.app(size: 10))
-                        .foregroundStyle(.tertiary)
-                }
-
-                if item.level < lastLevel {
-                    Button(item.title) {
-                        onNavigate(item.level)
-                    }
-                    .buttonStyle(.plain)
+        HStack(spacing: 8) {
+            Button(action: onHome) {
+                Image(systemName: "house")
                     .font(.app(size: 12))
-                    .foregroundStyle(.tint)
-                } else {
-                    Text(item.title)
-                        .font(.app(size: 12, weight: .semibold))
-                }
             }
+            .buttonStyle(.plain)
+            .foregroundStyle(.tint)
+
+            if let previous = previousItem {
+                Button(action: onBack) {
+                    HStack(spacing: 2) {
+                        Image(systemName: "chevron.left")
+                            .font(.app(size: 11))
+                        Text(previous.title)
+                            .font(.app(size: 12))
+                    }
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.tint)
+            }
+
             Spacer()
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 6)
-    }
-
-    @ViewBuilder
-    private func forEachItem<Content: View>(_ items: [BreadcrumbItem], @ViewBuilder content: @escaping (BreadcrumbItem) -> Content) -> some View {
-        let views = items.map { content($0) }
-        SwiftUI.ForEach(views.indices, id: \.self) { index in
-            views[index]
-        }
     }
 }

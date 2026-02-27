@@ -17,21 +17,12 @@ struct ContentView: View {
         } detail: {
             HStack(spacing: 0) {
                 NavigationStack(path: $navigationPath) {
-                    VStack(spacing: 0) {
-                        if breadcrumbs.count > 1 {
-                            BreadcrumbBar(items: breadcrumbs) { level in
-                                let popCount = navigationPath.count - level
-                                for _ in 0..<popCount {
-                                    navigationPath.removeLast()
-                                }
-                            }
-                            Divider()
-                        }
-                        ContentArea(sidebarItem: selectedSidebarItem, highlightedTrackID: $highlightedTrackID)
-                    }
+                    ContentArea(sidebarItem: selectedSidebarItem, highlightedTrackID: $highlightedTrackID)
+                        .navigationTitle(selectedSidebarItem?.label ?? "Linnet")
                         .navigationDestination(for: Album.self) { album in
                             let _ = Log.navigation.debug("Pushing AlbumDetailView: \(album.name)")
                             AlbumDetailView(album: album)
+                                .navigationTitle(selectedSidebarItem?.label ?? "Albums")
                                 .onAppear {
                                     NotificationCenter.default.post(
                                         name: .registerBreadcrumb,
@@ -43,6 +34,7 @@ struct ContentView: View {
                         .navigationDestination(for: Artist.self) { artist in
                             let _ = Log.navigation.debug("Pushing ArtistDetailView: \(artist.name)")
                             ArtistDetailView(artist: artist, navigationPath: $navigationPath)
+                                .navigationTitle(selectedSidebarItem?.label ?? "Artists")
                                 .onAppear {
                                     NotificationCenter.default.post(
                                         name: .registerBreadcrumb,
@@ -53,6 +45,7 @@ struct ContentView: View {
                         }
                         .navigationDestination(for: PersistentIdentifier.self) { id in
                             PlaylistDetailView(playlistID: id)
+                                .navigationTitle("Playlists")
                         }
                 }
                 .id(selectedSidebarItem.map { "\($0)" } ?? "none")
@@ -156,4 +149,5 @@ struct ContentView: View {
         }
         .dropOverlay(isTargeted: isDropTargeted)
     }
+
 }
