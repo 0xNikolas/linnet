@@ -1,5 +1,4 @@
 import SwiftUI
-import SwiftData
 import LinnetLibrary
 
 // MARK: - Grouping Option
@@ -18,9 +17,9 @@ enum SongsGrouping: String, CaseIterable, Identifiable {
 struct TrackSection: Identifiable {
     let id: String
     let tooltip: String?
-    let tracks: [Track]
+    let tracks: [TrackInfo]
 
-    init(id: String, tracks: [Track], tooltip: String? = nil) {
+    init(id: String, tracks: [TrackInfo], tooltip: String? = nil) {
         self.id = id
         self.tracks = tracks
         self.tooltip = tooltip
@@ -30,112 +29,94 @@ struct TrackSection: Identifiable {
 // MARK: - Wrapper View
 
 struct SongsGroupingView: View {
-    @Binding var highlightedTrackID: PersistentIdentifier?
-    @Query(sort: \Track.title) private var tracks: [Track]
+    @Binding var highlightedTrackID: Int64?
+    @Environment(\.appDatabase) private var appDatabase
+    @State private var tracks: [TrackInfo] = []
     @AppStorage("songsGrouping") private var grouping: SongsGrouping = .byFolder
+    @AppStorage("songsSortOption") private var sortOption: TrackSortOption = .title
+    @AppStorage("songsSortDirection") private var sortDirection: SortDirection = .ascending
     @State private var sections: [TrackSection] = []
     @State private var searchText = ""
     @State private var isSearchPresented = false
 
-    private var filteredTracks: [Track] {
-        if searchText.isEmpty { return tracks }
-        let query = searchText
-        return tracks.filter { track in
-            track.title.searchContains(query) ||
-            (track.artist?.name ?? "").searchContains(query) ||
-            (track.album?.name ?? "").searchContains(query) ||
-            (track.genre ?? "").searchContains(query)
-        }
-    }
-
     var body: some View {
-        VStack(spacing: 0) {
-            groupingPicker
-            Divider()
-
-            SongsListView(
-                tracks: filteredTracks,
-                sections: grouping == .allSongs ? [] : sections,
-                highlightedTrackID: $highlightedTrackID
-            )
-        }
+        SongsListView(
+            tracks: tracks,
+            sections: grouping == .allSongs ? [] : sections,
+            highlightedTrackID: $highlightedTrackID
+        )
         .searchable(text: $searchText, isPresented: $isSearchPresented, prompt: "Search songs...")
+        .toolbar {
+            ToolbarItem(placement: .automatic) {
+                SortFilterMenuButton(
+                    sortOption: $sortOption,
+                    sortDirection: $sortDirection
+                ) { menu, coordinator in
+                    menu.addItem(.separator())
+                    let header = NSMenuItem(title: "Group By", action: nil, keyEquivalent: "")
+                    header.isEnabled = false
+                    menu.addItem(header)
+                    for option in SongsGrouping.allCases {
+                        let item = NSMenuItem(
+                            title: option.rawValue,
+                            action: #selector(type(of: coordinator).selectExtra(_:)),
+                            keyEquivalent: ""
+                        )
+                        item.target = coordinator
+                        item.state = grouping == option ? .on : .off
+                        item.representedObject = { [self] in
+                            grouping = option
+                        } as () -> Void
+                        menu.addItem(item)
+                    }
+                }
+            }
+        }
         .onReceive(NotificationCenter.default.publisher(for: .focusSearch)) { _ in
             isSearchPresented = true
         }
-        .onChange(of: tracks, initial: true) { _, _ in
-            rebuildSections()
-        }
-        .onChange(of: grouping) { _, _ in
-            rebuildSections()
-        }
-        .onChange(of: searchText) { _, _ in
-            rebuildSections()
-        }
+        .task { loadData() }
+        .onChange(of: grouping) { _, _ in loadData() }
+        .onChange(of: sortOption) { _, _ in loadData() }
+        .onChange(of: sortDirection) { _, _ in loadData() }
+        .onChange(of: searchText) { _, _ in loadData() }
     }
 
-    // MARK: - Picker
+    // MARK: - Data Loading
 
-    private var groupingPicker: some View {
-        HStack {
-            Picker("Group by", selection: $grouping) {
-                ForEach(SongsGrouping.allCases) { option in
-                    Text(option.rawValue).tag(option)
-                }
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .frame(maxWidth: 400)
-
-            Spacer()
-
-            Text("\(filteredTracks.count) songs")
-                .font(.app(size: 12))
-                .foregroundStyle(.secondary)
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-    }
-
-    // MARK: - Section Building
-
-    private func rebuildSections() {
-        guard grouping != .allSongs else {
-            sections = []
-            return
-        }
-        let source = filteredTracks
+    private func loadData() {
+        guard let db = appDatabase else { return }
+        let query = searchText.isEmpty ? nil : searchText
+        let column = sortOption.sqlColumn
+        let dir = sortDirection.sql
 
         switch grouping {
         case .allSongs:
-            sections = []
-            return
-        case .byArtist:
-            let grouped = Dictionary(grouping: source) { $0.artist?.name ?? "Unknown Artist" }
-            sections = grouped
-                .map { TrackSection(id: $0.key, tracks: sortTracks($0.value)) }
-                .sorted { $0.id.localizedCaseInsensitiveCompare($1.id) == .orderedAscending }
-        case .byAlbum:
-            let grouped = Dictionary(grouping: source) { $0.album?.name ?? "Unknown Album" }
-            sections = grouped
-                .map { TrackSection(id: $0.key, tracks: sortTracks($0.value)) }
-                .sorted { $0.id.localizedCaseInsensitiveCompare($1.id) == .orderedAscending }
-        case .byFolder:
-            let grouped = Dictionary(grouping: source) { track -> String in
-                URL(filePath: track.filePath).deletingLastPathComponent().path
+            if let q = query {
+                tracks = (try? db.tracks.searchAllInfo(query: q)) ?? []
+            } else {
+                tracks = (try? db.tracks.fetchAllInfo(orderedBy: column, direction: dir)) ?? []
             }
-            sections = grouped
-                .map { fullPath, tracks in
-                    // Show last 2 path components as display name (e.g. "Artist/Album")
-                    let components = fullPath.split(separator: "/")
-                    let displayName = components.suffix(2).joined(separator: "/")
-                    return TrackSection(id: displayName, tracks: sortTracks(tracks), tooltip: fullPath)
-                }
-                .sorted { $0.id.localizedCaseInsensitiveCompare($1.id) == .orderedAscending }
-        }
-    }
+            sections = []
 
-    private func sortTracks(_ tracks: [Track]) -> [Track] {
-        tracks.sorted { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
+        case .byArtist:
+            let grouped = (try? db.tracks.fetchInfoGroupedByArtist(searchQuery: query)) ?? []
+            sections = grouped.map { TrackSection(id: $0.sectionName, tracks: $0.tracks) }
+            tracks = grouped.flatMap { $0.tracks }
+
+        case .byAlbum:
+            let grouped = (try? db.tracks.fetchInfoGroupedByAlbum(searchQuery: query)) ?? []
+            sections = grouped.map { TrackSection(id: $0.sectionName, tracks: $0.tracks) }
+            tracks = grouped.flatMap { $0.tracks }
+
+        case .byFolder:
+            let grouped = (try? db.tracks.fetchInfoGroupedByFolder(searchQuery: query)) ?? []
+            sections = grouped.map { group in
+                let components = group.sectionName.split(separator: "/")
+                let displayName = components.suffix(2).joined(separator: "/")
+                return TrackSection(id: displayName, tracks: group.tracks, tooltip: group.sectionName)
+            }
+            tracks = grouped.flatMap { $0.tracks }
+        }
     }
 }

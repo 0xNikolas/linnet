@@ -1,5 +1,4 @@
 import SwiftUI
-import SwiftData
 import LinnetLibrary
 import UniformTypeIdentifiers
 
@@ -10,15 +9,17 @@ private func formatTime(_ seconds: Double) -> String {
 }
 
 struct AlbumDetailView: View {
-    let album: Album
+    let album: AlbumRecord
     @Environment(PlayerViewModel.self) private var player
     @Environment(ArtworkService.self) private var artworkService
-    @Environment(\.modelContext) private var modelContext
+    @Environment(\.appDatabase) private var appDatabase
     @State private var isFetchingArtwork = false
     @State private var showEditSheet = false
+    @State private var artworkImage: NSImage?
+    @State private var tracks: [TrackInfo] = []
 
-    private var sortedTracks: [Track] {
-        album.tracks.sorted {
+    private var sortedTracks: [TrackInfo] {
+        tracks.sorted {
             ($0.discNumber, $0.trackNumber) < ($1.discNumber, $1.trackNumber)
         }
     }
@@ -31,7 +32,7 @@ struct AlbumDetailView: View {
                     .fill(.quaternary)
                     .frame(width: 200, height: 200)
                     .overlay {
-                        if let artData = album.artworkData, let img = NSImage(data: artData) {
+                        if let img = artworkImage {
                             Image(nsImage: img)
                                 .resizable()
                                 .scaledToFill()
@@ -45,17 +46,32 @@ struct AlbumDetailView: View {
                     }
                     .clipShape(RoundedRectangle(cornerRadius: 8))
                     .task {
-                        guard album.artworkData == nil else { return }
+                        loadArtwork()
+                        guard artworkImage == nil, let db = appDatabase, let albumId = album.id else { return }
                         isFetchingArtwork = true
-                        await artworkService.fetchAlbumArtwork(for: album, context: modelContext)
+                        let _ = await artworkService.fetchAlbumArtwork(
+                            albumId: albumId,
+                            albumName: album.name,
+                            artistName: album.artistName,
+                            db: db
+                        )
+                        loadArtwork()
                         isFetchingArtwork = false
                     }
                     .contextMenu {
                         Button("Find Artwork") {
                             Task {
-                                album.artworkData = nil
+                                guard let db = appDatabase, let albumId = album.id else { return }
+                                artworkImage = nil
                                 isFetchingArtwork = true
-                                await artworkService.fetchAlbumArtwork(for: album, context: modelContext, force: true)
+                                let _ = await artworkService.fetchAlbumArtwork(
+                                    albumId: albumId,
+                                    albumName: album.name,
+                                    artistName: album.artistName,
+                                    db: db,
+                                    force: true
+                                )
+                                loadArtwork()
                                 isFetchingArtwork = false
                             }
                         }
@@ -70,11 +86,11 @@ struct AlbumDetailView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     Text(album.name)
                         .font(.app(size: 28, weight: .bold))
-                    if let artist = album.artist {
+                    if let artistId = album.artistId, let artistName = album.artistName {
                         Button {
-                            NotificationCenter.default.post(name: .navigateToArtist, object: nil, userInfo: ["artist": artist])
+                            NotificationCenter.default.post(name: .navigateToArtist, object: nil, userInfo: ["artistId": artistId, "artistName": artistName])
                         } label: {
-                            Text(artist.name)
+                            Text(artistName)
                                 .font(.app(size: 18))
                                 .foregroundStyle(.secondary)
                         }
@@ -129,7 +145,6 @@ struct AlbumDetailView: View {
 
             Divider()
 
-            // Track list with native multi-selection
             AlbumTrackListView(
                 sortedTracks: sortedTracks,
                 onPlay: { track, queue, index in
@@ -146,9 +161,27 @@ struct AlbumDetailView: View {
                 }
             )
         }
+        .task {
+            loadTracks()
+        }
         .sheet(isPresented: $showEditSheet) {
             EditAlbumSheet(album: album)
         }
+    }
+
+    private func loadTracks() {
+        guard let albumId = album.id else { return }
+        tracks = (try? appDatabase?.tracks.fetchInfoByAlbum(id: albumId)) ?? []
+    }
+
+    private func loadArtwork() {
+        guard let albumId = album.id, let db = appDatabase,
+              let data = try? db.artwork.fetchImageData(ownerType: "album", ownerId: albumId),
+              let img = NSImage(data: data) else {
+            artworkImage = nil
+            return
+        }
+        artworkImage = img
     }
 
     private func chooseArtworkFile() {
@@ -159,42 +192,33 @@ struct AlbumDetailView: View {
         panel.message = "Choose artwork for \"\(album.name)\""
         if panel.runModal() == .OK, let url = panel.url,
            let data = try? Data(contentsOf: url) {
-            album.artworkData = data
-            for track in album.tracks where track.artworkData == nil {
-                track.artworkData = data
-            }
-            try? modelContext.save()
+            guard let albumId = album.id, let db = appDatabase else { return }
+            try? db.artwork.upsert(ownerType: "album", ownerId: albumId, imageData: data, thumbnailData: nil)
+            artworkImage = NSImage(data: data)
         }
     }
 
-    private func removeTracks(ids: Set<PersistentIdentifier>) {
+    private func removeTracks(ids: Set<Int64>) {
+        guard let db = appDatabase else { return }
         for id in ids {
-            if let track = sortedTracks.first(where: { $0.id == id }) {
-                let album = track.album
-                let artist = track.artist
-                modelContext.delete(track)
-                if let album, album.tracks.isEmpty {
-                    modelContext.delete(album)
-                }
-                if let artist, artist.tracks.isEmpty {
-                    modelContext.delete(artist)
-                }
-            }
+            try? db.tracks.delete(id: id)
         }
-        try? modelContext.save()
+        try? db.albums.deleteOrphaned()
+        try? db.artists.deleteOrphaned()
+        loadTracks()
     }
 }
 
 // MARK: - AlbumTrackListView (no player environment -- immune to timer-driven redraws)
 
 private struct AlbumTrackListView: View {
-    let sortedTracks: [Track]
-    let onPlay: (Track, [Track], Int) -> Void
-    let onPlayNext: (Track) -> Void
-    let onPlayLater: (Track) -> Void
-    let onRemove: (Set<PersistentIdentifier>) -> Void
+    let sortedTracks: [TrackInfo]
+    let onPlay: (TrackInfo, [TrackInfo], Int) -> Void
+    let onPlayNext: (TrackInfo) -> Void
+    let onPlayLater: (TrackInfo) -> Void
+    let onRemove: (Set<Int64>) -> Void
 
-    @State private var selectedTrackIDs: Set<PersistentIdentifier> = []
+    @State private var selectedTrackIDs: Set<Int64> = []
 
     var body: some View {
         List(sortedTracks, selection: $selectedTrackIDs) { track in
@@ -215,7 +239,7 @@ private struct AlbumTrackListView: View {
             }
         }
         .listStyle(.inset)
-        .contextMenu(forSelectionType: PersistentIdentifier.self) { ids in
+        .contextMenu(forSelectionType: Int64.self) { ids in
             contextMenuContent(for: ids)
         } primaryAction: { ids in
             if let id = ids.first, let index = sortedTracks.firstIndex(where: { $0.id == id }) {
@@ -225,35 +249,27 @@ private struct AlbumTrackListView: View {
     }
 
     @ViewBuilder
-    private func contextMenuContent(for ids: Set<PersistentIdentifier>) -> some View {
+    private func contextMenuContent(for ids: Set<Int64>) -> some View {
         if let id = ids.first, let index = sortedTracks.firstIndex(where: { $0.id == id }) {
             let track = sortedTracks[index]
-            Button("Play") {
-                onPlay(track, sortedTracks, index)
-            }
-            Button("Play Next") {
-                onPlayNext(track)
-            }
-            Button("Play Later") {
-                onPlayLater(track)
-            }
+            Button { onPlay(track, sortedTracks, index) } label: { Label("Play", systemImage: "play") }
+            Button { onPlayNext(track) } label: { Label("Play Next", systemImage: "text.line.first.and.arrowtriangle.forward") }
+            Button { onPlayLater(track) } label: { Label("Play Later", systemImage: "text.line.last.and.arrowtriangle.forward") }
             Divider()
             AddToPlaylistMenu(tracks: selectedTracks(for: ids))
             LikeDislikeMenu(tracks: selectedTracks(for: ids))
             Divider()
-            if let artist = track.artist {
-                Button("Go to Artist") {
-                    NotificationCenter.default.post(name: .navigateToArtist, object: nil, userInfo: ["artist": artist])
-                }
+            if let artistId = track.artistId, let artistName = track.artistName {
+                Button {
+                    NotificationCenter.default.post(name: .navigateToArtist, object: nil, userInfo: ["artistId": artistId, "artistName": artistName])
+                } label: { Label("Go to Artist", systemImage: "music.mic") }
             }
             Divider()
-            Button("Remove from Library", role: .destructive) {
-                onRemove(ids)
-            }
+            Button(role: .destructive) { onRemove(ids) } label: { Label("Remove from Library", systemImage: "trash") }
         }
     }
 
-    private func selectedTracks(for ids: Set<PersistentIdentifier>) -> [Track] {
+    private func selectedTracks(for ids: Set<Int64>) -> [TrackInfo] {
         sortedTracks.filter { ids.contains($0.id) }
     }
 }

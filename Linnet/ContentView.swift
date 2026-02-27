@@ -1,13 +1,13 @@
 import SwiftUI
-import SwiftData
 import LinnetLibrary
 
 struct ContentView: View {
     @Environment(PlayerViewModel.self) private var player
+    @Environment(\.appDatabase) private var appDatabase
     @State private var selectedSidebarItem: SidebarItem? = .listenNow
     @State private var isDropTargeted = false
     @State private var navigationPath = NavigationPath()
-    @State private var highlightedTrackID: PersistentIdentifier?
+    @State private var highlightedTrackID: Int64?
     @AppStorage("showQueueSidePane") private var showQueueSidePane = false
     @State private var breadcrumbs: [BreadcrumbItem] = []
 
@@ -19,7 +19,7 @@ struct ContentView: View {
                 NavigationStack(path: $navigationPath) {
                     ContentArea(sidebarItem: selectedSidebarItem, highlightedTrackID: $highlightedTrackID)
                         .navigationTitle(selectedSidebarItem?.label ?? "Linnet")
-                        .navigationDestination(for: Album.self) { album in
+                        .navigationDestination(for: AlbumRecord.self) { album in
                             let _ = Log.navigation.debug("Pushing AlbumDetailView: \(album.name)")
                             AlbumDetailView(album: album)
                                 .navigationTitle(selectedSidebarItem?.label ?? "Albums")
@@ -31,7 +31,7 @@ struct ContentView: View {
                                     )
                                 }
                         }
-                        .navigationDestination(for: Artist.self) { artist in
+                        .navigationDestination(for: ArtistRecord.self) { artist in
                             let _ = Log.navigation.debug("Pushing ArtistDetailView: \(artist.name)")
                             ArtistDetailView(artist: artist, navigationPath: $navigationPath)
                                 .navigationTitle(selectedSidebarItem?.label ?? "Artists")
@@ -43,7 +43,7 @@ struct ContentView: View {
                                     )
                                 }
                         }
-                        .navigationDestination(for: PersistentIdentifier.self) { id in
+                        .navigationDestination(for: Int64.self) { id in
                             PlaylistDetailView(playlistID: id)
                                 .navigationTitle("Playlists")
                         }
@@ -85,16 +85,17 @@ struct ContentView: View {
                 NotificationCenter.default.post(
                     name: .highlightTrackInDetail,
                     object: nil,
-                    userInfo: ["trackID": track.persistentModelID]
+                    userInfo: ["trackID": track.id]
                 )
                 return
             }
             selectedSidebarItem = .songs
             navigationPath = NavigationPath()
-            highlightedTrackID = track.persistentModelID
+            highlightedTrackID = track.id
         }
         .onReceive(NotificationCenter.default.publisher(for: .navigateToCurrentArtist)) { _ in
-            guard let artist = player.currentQueueTrack?.artist else { return }
+            guard let artistId = player.currentQueueTrack?.artistId,
+                  let artistName = player.currentQueueTrack?.artistName else { return }
             if selectedSidebarItem == .artists && !navigationPath.isEmpty {
                 return
             }
@@ -102,20 +103,22 @@ struct ContentView: View {
             navigationPath = NavigationPath()
             Task { @MainActor in
                 try? await Task.sleep(for: .milliseconds(100))
-                navigationPath.append(artist)
+                navigationPath.append(ArtistRecord(id: artistId, name: artistName))
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .navigateToArtist)) { notification in
-            guard let artist = notification.userInfo?["artist"] as? Artist else { return }
+            guard let artistId = notification.userInfo?["artistId"] as? Int64,
+                  let artistName = notification.userInfo?["artistName"] as? String else { return }
             selectedSidebarItem = .artists
             navigationPath = NavigationPath()
             Task { @MainActor in
                 try? await Task.sleep(for: .milliseconds(100))
-                navigationPath.append(artist)
+                navigationPath.append(ArtistRecord(id: artistId, name: artistName))
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .navigateToAlbum)) { notification in
-            guard let album = notification.userInfo?["album"] as? Album else { return }
+            guard let albumId = notification.userInfo?["albumId"] as? Int64 else { return }
+            guard let album = try? appDatabase?.albums.fetchOne(id: albumId) else { return }
             selectedSidebarItem = .albums
             navigationPath = NavigationPath()
             Task { @MainActor in
@@ -124,7 +127,7 @@ struct ContentView: View {
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .navigateToPlaylist)) { notification in
-            guard let playlistID = notification.userInfo?["playlistID"] as? PersistentIdentifier else { return }
+            guard let playlistID = notification.userInfo?["playlistID"] as? Int64 else { return }
             navigationPath = NavigationPath()
             Task { @MainActor in
                 try? await Task.sleep(for: .milliseconds(100))

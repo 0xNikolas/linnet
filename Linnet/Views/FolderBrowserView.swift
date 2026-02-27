@@ -1,15 +1,14 @@
 import SwiftUI
-import SwiftData
 import LinnetLibrary
 
 struct FolderBrowserView: View {
-    @Environment(\.modelContext) private var modelContext
-    @Query private var watchedFolders: [WatchedFolder]
+    @Environment(\.appDatabase) private var appDatabase
+    @State private var watchedFolders: [WatchedFolderRecord] = []
     @State private var libraryVM = LibraryViewModel()
     @State private var searchText = ""
     @State private var isSearchPresented = false
 
-    private var filteredFolders: [WatchedFolder] {
+    private var filteredFolders: [WatchedFolderRecord] {
         if searchText.isEmpty { return watchedFolders }
         let query = searchText
         return watchedFolders.filter { $0.path.searchContains(query) }
@@ -27,7 +26,10 @@ struct FolderBrowserView: View {
                     panel.canChooseFiles = false
                     panel.allowsMultipleSelection = false
                     if panel.runModal() == .OK, let url = panel.url {
-                        libraryVM.addFolder(url: url, context: modelContext)
+                        if let db = appDatabase {
+                            libraryVM.addFolder(url: url, db: db)
+                            loadFolders()
+                        }
                     }
                 }
                 .buttonStyle(.bordered)
@@ -71,28 +73,19 @@ struct FolderBrowserView: View {
         .onReceive(NotificationCenter.default.publisher(for: .focusSearch)) { _ in
             isSearchPresented = true
         }
+        .task { loadFolders() }
     }
 
-    private func removeFolder(_ folder: WatchedFolder) {
-        let folderPath = folder.path
-        let descriptor = FetchDescriptor<Track>(predicate: #Predicate { $0.filePath.starts(with: folderPath) })
-        if let tracks = try? modelContext.fetch(descriptor) {
-            for track in tracks {
-                modelContext.delete(track)
-            }
-        }
-        modelContext.delete(folder)
-        // Clean up orphaned albums and artists
-        if let albums = try? modelContext.fetch(FetchDescriptor<Album>()) {
-            for album in albums where album.tracks.isEmpty {
-                modelContext.delete(album)
-            }
-        }
-        if let artists = try? modelContext.fetch(FetchDescriptor<Artist>()) {
-            for artist in artists where artist.tracks.isEmpty {
-                modelContext.delete(artist)
-            }
-        }
-        try? modelContext.save()
+    private func loadFolders() {
+        watchedFolders = (try? appDatabase?.watchedFolders.fetchAll()) ?? []
+    }
+
+    private func removeFolder(_ folder: WatchedFolderRecord) {
+        guard let db = appDatabase else { return }
+        try? db.tracks.deleteByFolder(pathPrefix: folder.path)
+        try? db.watchedFolders.deleteByPath(folder.path)
+        try? db.albums.deleteOrphaned()
+        try? db.artists.deleteOrphaned()
+        loadFolders()
     }
 }

@@ -1,12 +1,11 @@
 import SwiftUI
-import SwiftData
 import LinnetLibrary
 import UniformTypeIdentifiers
 
 struct EditAlbumSheet: View {
-    let album: Album
+    let album: AlbumRecord
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.modelContext) private var modelContext
+    @Environment(\.appDatabase) private var appDatabase
     @State private var name: String = ""
     @State private var artistName: String = ""
     @State private var yearText: String = ""
@@ -87,29 +86,30 @@ struct EditAlbumSheet: View {
             name = album.name
             artistName = album.artistName ?? ""
             yearText = album.year.map { "\($0)" } ?? ""
-            if let data = album.artworkData, let img = NSImage(data: data) {
+            if let albumId = album.id, let db = appDatabase,
+               let data = try? db.artwork.fetchImageData(ownerType: "album", ownerId: albumId),
+               let img = NSImage(data: data) {
                 artworkImage = img
             }
         }
     }
 
     private func save() {
-        album.name = name
-        album.artistName = artistName.isEmpty ? nil : artistName
-        album.year = Int(yearText)
+        guard let db = appDatabase, let albumId = album.id else { return }
+        var updated = album
+        updated.name = name
+        updated.artistName = artistName.isEmpty ? nil : artistName
+        updated.year = Int(yearText)
+        try? db.albums.update(updated)
 
         if let data = newArtworkData {
             if data.isEmpty {
-                album.artworkData = nil
+                try? db.artwork.delete(ownerType: "album", ownerId: albumId)
             } else {
-                album.artworkData = data
-                for track in album.tracks where track.artworkData == nil {
-                    track.artworkData = data
-                }
+                try? db.artwork.upsert(ownerType: "album", ownerId: albumId, imageData: data, thumbnailData: nil)
             }
         }
 
-        try? modelContext.save()
         dismiss()
     }
 

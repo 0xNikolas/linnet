@@ -2,22 +2,24 @@ import SwiftUI
 import LinnetLibrary
 
 struct LikeDislikeMenu: View {
-    let tracks: [Track]
-    @Environment(\.modelContext) private var modelContext
+    let tracks: [TrackInfo]
+    @Environment(\.appDatabase) private var appDatabase
 
     var body: some View {
         let allLiked = tracks.allSatisfy { $0.likedStatus == 1 }
         let allDisliked = tracks.allSatisfy { $0.likedStatus == -1 }
 
-        Button(allLiked ? "Remove Like" : "Like") {
+        Button {
             let newStatus = allLiked ? 0 : 1
-            for track in tracks { track.likedStatus = newStatus }
-            try? modelContext.save()
-        }
-        Button(allDisliked ? "Remove Dislike" : "Dislike") {
+            for track in tracks {
+                try? appDatabase?.tracks.updateLikedStatus(filePath: track.filePath, status: newStatus)
+            }
+        } label: { Label(allLiked ? "Remove Like" : "Like", systemImage: allLiked ? "heart.slash" : "heart") }
+        Button {
             let newStatus = allDisliked ? 0 : -1
-            for track in tracks { track.likedStatus = newStatus }
-            try? modelContext.save()
-        }
+            for track in tracks {
+                try? appDatabase?.tracks.updateLikedStatus(filePath: track.filePath, status: newStatus)
+            }
+        } label: { Label(allDisliked ? "Remove Dislike" : "Dislike", systemImage: allDisliked ? "hand.thumbsdown.fill" : "hand.thumbsdown") }
     }
 }

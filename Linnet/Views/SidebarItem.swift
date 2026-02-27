@@ -9,11 +9,12 @@ enum SidebarItem: Hashable, Codable {
     case songs
     case likedSongs
     case folders
+    case playlists
     case playlist(String)
 
     /// All library items in default order.
     static let allLibraryItems: [SidebarItem] = [
-        .songs, .likedSongs, .recentlyAdded, .artists, .albums, .folders
+        .songs, .likedSongs, .recentlyAdded, .artists, .albums, .playlists, .folders
     ]
 
     var label: String {
@@ -26,6 +27,7 @@ enum SidebarItem: Hashable, Codable {
         case .songs: return "Songs"
         case .likedSongs: return "Liked Songs"
         case .folders: return "Folders"
+        case .playlists: return "Playlists"
         case .playlist(let name): return name
         }
     }
@@ -40,6 +42,7 @@ enum SidebarItem: Hashable, Codable {
         case .songs: return "music.note"
         case .likedSongs: return "heart.fill"
         case .folders: return "folder"
+        case .playlists: return "music.note.list"
         case .playlist: return "music.note.list"
         }
     }

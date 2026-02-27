@@ -1,17 +1,19 @@
 import SwiftUI
-import SwiftData
 import LinnetLibrary
 
 struct AddToPlaylistMenu: View {
-    let tracks: [Track]
+    let tracks: [TrackInfo]
 
-    @Query(sort: \Playlist.name) private var playlists: [Playlist]
-    @Environment(\.modelContext) private var modelContext
+    @Environment(\.appDatabase) private var appDatabase
     @State private var showNewPlaylistSheet = false
 
+    private var playlists: [PlaylistRecord] {
+        (try? appDatabase?.playlists.fetchAll()) ?? []
+    }
+
     var body: some View {
-        Menu("Add to Playlist") {
-            ForEach(playlists) { playlist in
+        Menu {
+            ForEach(playlists, id: \.id) { playlist in
                 Button(playlist.name) {
                     addTracks(to: playlist)
                 }
@@ -20,6 +22,8 @@ struct AddToPlaylistMenu: View {
             Button("New Playlist...") {
                 showNewPlaylistSheet = true
             }
+        } label: {
+            Label("Add to Playlist", systemImage: "text.badge.plus")
         }
         .background {
             Color.clear
@@ -29,14 +33,9 @@ struct AddToPlaylistMenu: View {
         }
     }
 
-    private func addTracks(to playlist: Playlist) {
-        let startOrder = playlist.entries.count
-        for (i, track) in tracks.enumerated() {
-            let entry = PlaylistEntry(track: track, order: startOrder + i)
-            entry.playlist = playlist
-            playlist.entries.append(entry)
-            modelContext.insert(entry)
-        }
-        try? modelContext.save()
+    private func addTracks(to playlist: PlaylistRecord) {
+        guard let db = appDatabase, let playlistId = playlist.id else { return }
+        let trackIds = tracks.map(\.id)
+        try? db.playlists.addTracks(trackIds: trackIds, toPlaylist: playlistId)
     }
 }

@@ -1,5 +1,4 @@
 import SwiftUI
-import SwiftData
 import LinnetLibrary
 
 struct SidebarView: View {
@@ -7,19 +6,17 @@ struct SidebarView: View {
     @AppStorage("sidebarConfiguration") private var configuration: SidebarConfiguration = .default
     @State private var showEditSheet = false
     @State private var showNewPlaylistSheet = false
-    @State private var renamingPlaylist: Playlist?
+    @State private var renamingPlaylist: PlaylistRecord?
     @State private var renameText = ""
-    @Environment(\.modelContext) private var modelContext
+    @State private var playlists: [PlaylistRecord] = []
+    @Environment(\.appDatabase) private var appDatabase
     @Environment(PlayerViewModel.self) private var player
-    @Query(sort: \Playlist.createdAt) private var playlists: [Playlist]
 
     var body: some View {
         List(selection: $selectedItem) {
             Section {
-                Label(SidebarItem.listenNow.label, systemImage: SidebarItem.listenNow.systemImage)
-                    .tag(SidebarItem.listenNow)
-                Label(SidebarItem.ai.label, systemImage: SidebarItem.ai.systemImage)
-                    .tag(SidebarItem.ai)
+                sidebarLabel(SidebarItem.listenNow)
+                sidebarLabel(SidebarItem.ai)
             } header: {
                 Text("Home")
                     .font(.app(size: 11, weight: .semibold))
@@ -28,16 +25,11 @@ struct SidebarView: View {
 
             Section {
                 ForEach(configuration.visibleItems, id: \.self) { item in
-                    Label(item.label, systemImage: item.systemImage)
-                        .tag(item)
+                    sidebarLabel(item)
                         .contextMenu {
-                            Button("Hide \"\(item.label)\"") {
-                                setVisibility(of: item, visible: false)
-                            }
+                            Button { setVisibility(of: item, visible: false) } label: { Label("Hide \"\(item.label)\"", systemImage: "eye.slash") }
                             Divider()
-                            Button("Edit Sidebar...") {
-                                showEditSheet = true
-                            }
+                            Button { showEditSheet = true } label: { Label("Edit Sidebar...", systemImage: "sidebar.left") }
                         }
                 }
                 .onMove { source, destination in
@@ -51,64 +43,74 @@ struct SidebarView: View {
 
             Section {
                 ForEach(playlists) { playlist in
-                    Label(playlist.name, systemImage: playlist.isAIGenerated ? "sparkles" : "music.note.list")
-                        .tag(SidebarItem.playlist(playlist.persistentModelID.hashValue.description))
+                    HStack(spacing: 8) {
+                        Image(systemName: playlist.isAIGenerated ? "sparkles" : "music.note.list")
+                            .font(.system(size: 18))
+                            .frame(width: 24, alignment: .center)
+                            .foregroundStyle(.secondary)
+                        Text(playlist.name)
+                            .font(.app(size: 13))
+                    }
+                        .tag(SidebarItem.playlist(String(playlist.id!)))
                         .contentShape(Rectangle())
                         .onTapGesture {
                             selectedItem = nil
                             NotificationCenter.default.post(
                                 name: .navigateToPlaylist,
                                 object: nil,
-                                userInfo: ["playlistID": playlist.persistentModelID]
+                                userInfo: ["playlistID": playlist.id!]
                             )
                         }
                         .contextMenu {
-                            let tracks = playlist.entries.sorted { $0.order < $1.order }.map(\.track)
-
-                            Button("Play") {
+                            Button {
+                                let tracks = (try? appDatabase?.playlists.fetchTrackInfos(playlistId: playlist.id!)) ?? []
                                 guard let first = tracks.first else { return }
                                 player.playTrack(first, queue: tracks)
-                            }
-                            .disabled(tracks.isEmpty)
+                            } label: { Label("Play", systemImage: "play") }
+                            .disabled((try? appDatabase?.playlists.entryCount(playlistId: playlist.id!)) ?? 0 == 0)
 
-                            Button("Play Next") {
+                            Button {
+                                let tracks = (try? appDatabase?.playlists.fetchTrackInfos(playlistId: playlist.id!)) ?? []
                                 for track in tracks.reversed() {
                                     player.addNext(track)
                                 }
-                            }
-                            .disabled(tracks.isEmpty)
+                            } label: { Label("Play Next", systemImage: "text.line.first.and.arrowtriangle.forward") }
+                            .disabled((try? appDatabase?.playlists.entryCount(playlistId: playlist.id!)) ?? 0 == 0)
 
-                            Button("Play Later") {
+                            Button {
+                                let tracks = (try? appDatabase?.playlists.fetchTrackInfos(playlistId: playlist.id!)) ?? []
                                 for track in tracks {
                                     player.addLater(track)
                                 }
-                            }
-                            .disabled(tracks.isEmpty)
+                            } label: { Label("Play Later", systemImage: "text.line.last.and.arrowtriangle.forward") }
+                            .disabled((try? appDatabase?.playlists.entryCount(playlistId: playlist.id!)) ?? 0 == 0)
 
                             Divider()
 
-                            Button("Rename...") {
+                            Button {
                                 renameText = playlist.name
                                 renamingPlaylist = playlist
-                            }
+                            } label: { Label("Rename...", systemImage: "pencil") }
 
-                            Button("Duplicate") {
-                                duplicatePlaylist(playlist)
-                            }
+                            Button { duplicatePlaylist(playlist) } label: { Label("Duplicate", systemImage: "plus.square.on.square") }
 
                             Divider()
 
-                            Button("Delete Playlist", role: .destructive) {
-                                deletePlaylist(playlist)
-                            }
+                            Button(role: .destructive) { deletePlaylist(playlist) } label: { Label("Delete Playlist", systemImage: "trash") }
                         }
                 }
 
                 Button {
                     showNewPlaylistSheet = true
                 } label: {
-                    Label("New Playlist...", systemImage: "plus")
-                        .foregroundStyle(.secondary)
+                    HStack(spacing: 8) {
+                        Image(systemName: "plus")
+                            .font(.system(size: 18))
+                            .frame(width: 24, alignment: .center)
+                        Text("New Playlist...")
+                            .font(.app(size: 13))
+                    }
+                    .foregroundStyle(.secondary)
                 }
                 .buttonStyle(.plain)
             } header: {
@@ -121,8 +123,9 @@ struct SidebarView: View {
             NewPlaylistSheet(tracks: [])
         }
         .listStyle(.sidebar)
-        .onAppear {
+        .task {
             configuration.mergeDefaults()
+            loadPlaylists()
         }
         .sheet(isPresented: $showEditSheet) {
             EditSidebarSheet(configuration: $configuration)
@@ -134,37 +137,51 @@ struct SidebarView: View {
             TextField("Name", text: $renameText)
             Button("Cancel", role: .cancel) { renamingPlaylist = nil }
             Button("Rename") {
-                if let playlist = renamingPlaylist, !renameText.trimmingCharacters(in: .whitespaces).isEmpty {
+                if var playlist = renamingPlaylist, !renameText.trimmingCharacters(in: .whitespaces).isEmpty {
                     playlist.name = renameText.trimmingCharacters(in: .whitespaces)
-                    try? modelContext.save()
+                    try? appDatabase?.playlists.update(playlist)
+                    loadPlaylists()
                 }
                 renamingPlaylist = nil
             }
         }
     }
 
-    // MARK: - Helpers
+    // MARK: - Sidebar Label
 
-    private func deletePlaylist(_ playlist: Playlist) {
-        modelContext.delete(playlist)
-        try? modelContext.save()
+    private func sidebarLabel(_ item: SidebarItem) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: item.systemImage)
+                .font(.system(size: 18))
+                .frame(width: 24, alignment: .center)
+                .foregroundStyle(.secondary)
+            Text(item.label)
+                .font(.app(size: 13))
+        }
+        .tag(item)
     }
 
-    private func duplicatePlaylist(_ playlist: Playlist) {
-        let copy = Playlist(name: "\(playlist.name) Copy", isAIGenerated: playlist.isAIGenerated)
-        modelContext.insert(copy)
-        for entry in playlist.entries.sorted(by: { $0.order < $1.order }) {
-            let newEntry = PlaylistEntry(track: entry.track, order: entry.order)
-            newEntry.playlist = copy
-            modelContext.insert(newEntry)
-        }
-        try? modelContext.save()
+    // MARK: - Helpers
+
+    private func loadPlaylists() {
+        playlists = (try? appDatabase?.playlists.fetchAllByCreatedAt()) ?? []
+    }
+
+    private func deletePlaylist(_ playlist: PlaylistRecord) {
+        guard let id = playlist.id else { return }
+        try? appDatabase?.playlists.delete(id: id)
+        loadPlaylists()
+    }
+
+    private func duplicatePlaylist(_ playlist: PlaylistRecord) {
+        guard let id = playlist.id else { return }
+        try? appDatabase?.playlists.duplicate(playlistId: id, newName: "\(playlist.name) Copy")
+        loadPlaylists()
     }
 
     private func setVisibility(of item: SidebarItem, visible: Bool) {
         guard let index = configuration.entries.firstIndex(where: { $0.item == item }) else { return }
         configuration.entries[index].isVisible = visible
-        // If we hid the selected item, clear selection
         if !visible && selectedItem == item {
             selectedItem = configuration.visibleItems.first
         }
@@ -175,15 +192,11 @@ struct SidebarView: View {
         var visible = configuration.visibleItems
         visible.move(fromOffsets: source, toOffset: destination)
 
-        // Rebuild entries: keep hidden items in their relative position among visible ones.
-        // Strategy: replace the ordering of visible items while keeping hidden items attached
-        // after their preceding visible item.
         var newEntries: [SidebarConfiguration.Entry] = []
         let hiddenEntries = configuration.entries.filter { !$0.isVisible }
 
-        // Build a mapping from each visible item to hidden items that originally followed it.
         var hiddenAfter: [SidebarItem: [SidebarConfiguration.Entry]] = [:]
-        var hiddenBefore: [SidebarConfiguration.Entry] = [] // hidden items before any visible item
+        var hiddenBefore: [SidebarConfiguration.Entry] = []
         var lastVisible: SidebarItem?
         for entry in configuration.entries {
             if entry.isVisible {
@@ -197,7 +210,6 @@ struct SidebarView: View {
             }
         }
 
-        // Reconstruct: leading hidden items, then each visible item followed by its hidden items.
         newEntries.append(contentsOf: hiddenBefore)
         for item in visible {
             newEntries.append(SidebarConfiguration.Entry(item: item, isVisible: true))

@@ -1,5 +1,4 @@
 import SwiftUI
-import SwiftData
 import LinnetLibrary
 
 private func formatTime(_ seconds: Double) -> String {
@@ -9,12 +8,12 @@ private func formatTime(_ seconds: Double) -> String {
 }
 
 struct PlaylistDetailView: View {
-    let playlistID: PersistentIdentifier
+    let playlistID: Int64
     @Environment(PlayerViewModel.self) private var player
-    @Environment(\.modelContext) private var modelContext
-    @State private var playlist: Playlist?
-    @State private var tracks: [Track] = []
-    @State private var selectedTrackIDs: Set<PersistentIdentifier> = []
+    @Environment(\.appDatabase) private var appDatabase
+    @State private var playlist: PlaylistRecord?
+    @State private var tracks: [TrackInfo] = []
+    @State private var selectedTrackIDs: Set<Int64> = []
 
     var body: some View {
         Group {
@@ -40,7 +39,7 @@ struct PlaylistDetailView: View {
     }
 
     @ViewBuilder
-    private func playlistContent(_ playlist: Playlist) -> some View {
+    private func playlistContent(_ playlist: PlaylistRecord) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             // Header
             HStack(alignment: .bottom, spacing: 16) {
@@ -96,7 +95,7 @@ struct PlaylistDetailView: View {
 
     @ViewBuilder
     private var trackTable: some View {
-        Table(of: Track.self, selection: $selectedTrackIDs) {
+        Table(of: TrackInfo.self, selection: $selectedTrackIDs) {
             TableColumn("#") { track in
                 if let index = tracks.firstIndex(where: { $0.id == track.id }) {
                     Text("\(index + 1)")
@@ -113,14 +112,14 @@ struct PlaylistDetailView: View {
             }
 
             TableColumn("Artist") { track in
-                Text(track.artist?.name ?? "Unknown Artist")
+                Text(track.artistName ?? "Unknown Artist")
                     .font(.app(size: 13))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
 
             TableColumn("Album") { track in
-                Text(track.album?.name ?? "")
+                Text(track.albumName ?? "")
                     .font(.app(size: 13))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
@@ -139,7 +138,7 @@ struct PlaylistDetailView: View {
                 TableRow(track)
             }
         }
-        .contextMenu(forSelectionType: PersistentIdentifier.self) { ids in
+        .contextMenu(forSelectionType: Int64.self) { ids in
             contextMenuContent(for: ids)
         } primaryAction: { ids in
             if let id = ids.first, let index = tracks.firstIndex(where: { $0.id == id }) {
@@ -149,86 +148,45 @@ struct PlaylistDetailView: View {
     }
 
     @ViewBuilder
-    private func contextMenuContent(for ids: Set<PersistentIdentifier>) -> some View {
+    private func contextMenuContent(for ids: Set<Int64>) -> some View {
         if let id = ids.first, let index = tracks.firstIndex(where: { $0.id == id }) {
             let track = tracks[index]
-            Button("Play") {
-                player.playTrack(track, queue: tracks, startingAt: index)
-            }
-            Button("Play Next") {
-                player.addNext(track)
-            }
-            Button("Play Later") {
-                player.addLater(track)
-            }
+            Button { player.playTrack(track, queue: tracks, startingAt: index) } label: { Label("Play", systemImage: "play") }
+            Button { player.addNext(track) } label: { Label("Play Next", systemImage: "text.line.first.and.arrowtriangle.forward") }
+            Button { player.addLater(track) } label: { Label("Play Later", systemImage: "text.line.last.and.arrowtriangle.forward") }
             AddToPlaylistMenu(tracks: selectedTracks(for: ids))
             LikeDislikeMenu(tracks: selectedTracks(for: ids))
             Divider()
-            if let artist = track.artist {
-                Button("Go to Artist") {
-                    NotificationCenter.default.post(name: .navigateToArtist, object: nil, userInfo: ["artist": artist])
-                }
+            if let artistId = track.artistId, let artistName = track.artistName {
+                Button {
+                    NotificationCenter.default.post(name: .navigateToArtist, object: nil, userInfo: ["artistId": artistId, "artistName": artistName])
+                } label: { Label("Go to Artist", systemImage: "music.mic") }
             }
-            if let album = track.album {
-                Button("Go to Album") {
-                    NotificationCenter.default.post(name: .navigateToAlbum, object: nil, userInfo: ["album": album])
-                }
+            if let albumId = track.albumId {
+                Button {
+                    NotificationCenter.default.post(name: .navigateToAlbum, object: nil, userInfo: ["albumId": albumId])
+                } label: { Label("Go to Album", systemImage: "square.stack") }
             }
             Divider()
-            Button("Remove from Playlist", role: .destructive) {
-                removeSelectedTracks(ids)
-            }
+            Button(role: .destructive) { removeSelectedTracks(ids) } label: { Label("Remove from Playlist", systemImage: "minus.circle") }
         }
     }
 
-    private func selectedTracks(for ids: Set<PersistentIdentifier>) -> [Track] {
+    private func selectedTracks(for ids: Set<Int64>) -> [TrackInfo] {
         tracks.filter { ids.contains($0.id) }
     }
 
     private func loadPlaylist() {
-        let fetched: Playlist? = modelContext.registeredModel(for: playlistID)
-            ?? (modelContext.model(for: playlistID) as? Playlist)
-        guard let fetched else { return }
-        playlist = fetched
+        playlist = try? appDatabase?.playlists.fetchOne(id: playlistID)
         reloadTracks()
     }
 
     private func reloadTracks() {
-        guard let playlist else {
-            tracks = []
-            return
-        }
-        let sortedEntries = playlist.entries.sorted { $0.order < $1.order }
-        let trackIDs = sortedEntries.map { $0.track.persistentModelID }
-
-        let allTracks: [Track]
-        do {
-            let descriptor = FetchDescriptor<Track>()
-            allTracks = try modelContext.fetch(descriptor)
-        } catch {
-            tracks = []
-            return
-        }
-
-        let tracksByID = Dictionary(uniqueKeysWithValues: allTracks.map { ($0.persistentModelID, $0) })
-        tracks = trackIDs.compactMap { tracksByID[$0] }
+        tracks = (try? appDatabase?.playlists.fetchTrackInfos(playlistId: playlistID)) ?? []
     }
 
-    private func removeSelectedTracks(_ ids: Set<PersistentIdentifier>) {
-        guard let playlist else { return }
-        let sorted = playlist.entries.sorted { $0.order < $1.order }
-        let entriesToRemove = sorted.filter { entry in
-            ids.contains(entry.track.persistentModelID)
-        }
-        for entry in entriesToRemove {
-            playlist.entries.removeAll { $0.id == entry.id }
-            modelContext.delete(entry)
-        }
-        let remaining = playlist.entries.sorted { $0.order < $1.order }
-        for (i, e) in remaining.enumerated() {
-            e.order = i
-        }
-        try? modelContext.save()
+    private func removeSelectedTracks(_ ids: Set<Int64>) {
+        try? appDatabase?.playlists.removeEntries(trackIds: ids, fromPlaylist: playlistID)
         selectedTrackIDs = []
         reloadTracks()
     }

@@ -1,11 +1,13 @@
 import SwiftUI
-import SwiftData
 import LinnetLibrary
 
 @main
 struct LinnetApp: App {
     @State private var playerViewModel = PlayerViewModel()
     @State private var artworkService = ArtworkService()
+    @State private var appDatabase: AppDatabase? = {
+        try? AppDatabase(location: .saved())
+    }()
     @AppStorage("acoustIDAPIKey") private var acoustIDKey = ""
     @AppStorage("fanartTVAPIKey") private var fanartTVKey = ""
     @AppStorage("fontSizeOffset") private var fontSizeOffset: Double = 2
@@ -14,24 +16,17 @@ struct LinnetApp: App {
         UserDefaults.standard.register(defaults: ["fontSizeOffset": 2.0])
     }
 
-    var sharedModelContainer: ModelContainer = {
-        let schema = Schema([Track.self, Album.self, Artist.self, Playlist.self, PlaylistEntry.self, WatchedFolder.self])
-        let modelConfiguration = ModelConfiguration(schema: schema)
-        do {
-            return try ModelContainer(for: schema, configurations: [modelConfiguration])
-        } catch {
-            fatalError("Could not create ModelContainer: \(error)")
-        }
-    }()
-
     var body: some Scene {
         WindowGroup {
             ContentView()
                 .id(fontSizeOffset)
                 .environment(playerViewModel)
                 .environment(artworkService)
+                .environment(\.appDatabase, appDatabase)
                 .onAppear {
-                    playerViewModel.setModelContext(sharedModelContainer.mainContext)
+                    if let db = appDatabase {
+                        playerViewModel.setAppDatabase(db)
+                    }
                 }
                 .onChange(of: fanartTVKey, initial: true) { _, newValue in
                     artworkService.fanartTVAPIKey = newValue
@@ -42,7 +37,6 @@ struct LinnetApp: App {
         }
         .windowStyle(.titleBar)
         .defaultSize(width: 1100, height: 700)
-        .modelContainer(sharedModelContainer)
         .commands {
             CommandGroup(after: .textEditing) {
                 Button("Find...") {
@@ -90,7 +84,7 @@ struct LinnetApp: App {
 
         Settings {
             SettingsView()
-                .modelContainer(sharedModelContainer)
+                .environment(\.appDatabase, appDatabase)
         }
     }
 }

@@ -1,10 +1,9 @@
 import SwiftUI
-import SwiftData
 import LinnetLibrary
 
 struct NewPlaylistSheet: View {
-    let tracks: [Track]
-    @Environment(\.modelContext) private var modelContext
+    let tracks: [TrackInfo]
+    @Environment(\.appDatabase) private var appDatabase
     @Environment(\.dismiss) private var dismiss
     @State private var playlistName: String = ""
     @FocusState private var nameFieldFocused: Bool
@@ -42,13 +41,13 @@ struct NewPlaylistSheet: View {
                         .padding(.horizontal)
                         .padding(.top, 8)
 
-                    List(tracks) { track in
+                    List(tracks, id: \.id) { track in
                         HStack {
                             VStack(alignment: .leading) {
                                 Text(track.title)
                                     .font(.app(size: 13))
                                     .lineLimit(1)
-                                Text(track.artist?.name ?? "Unknown Artist")
+                                Text(track.artistName ?? "Unknown Artist")
                                     .font(.app(size: 11))
                                     .foregroundStyle(.secondary)
                                     .lineLimit(1)
@@ -81,8 +80,8 @@ struct NewPlaylistSheet: View {
     }
 
     private func suggestedName() -> String {
-        let artists = Set(tracks.compactMap { $0.artist?.name })
-        let albums = Set(tracks.compactMap { $0.album?.name })
+        let artists = Set(tracks.compactMap { $0.artistName })
+        let albums = Set(tracks.compactMap { $0.albumName })
 
         if artists.count == 1, let artist = artists.first {
             return "Best of \(artist)"
@@ -93,16 +92,14 @@ struct NewPlaylistSheet: View {
     }
 
     private func createPlaylist() {
+        guard let db = appDatabase else { return }
         let name = playlistName.trimmingCharacters(in: .whitespaces)
-        let playlist = Playlist(name: name)
-        modelContext.insert(playlist)
+        var playlist = PlaylistRecord(name: name)
+        try? db.playlists.insert(&playlist)
 
-        for (i, track) in tracks.enumerated() {
-            let entry = PlaylistEntry(track: track, order: i)
-            entry.playlist = playlist
-            playlist.entries.append(entry)
-            modelContext.insert(entry)
+        if let playlistId = playlist.id {
+            let trackIds = tracks.compactMap { $0.id as Int64? }
+            try? db.playlists.addTracks(trackIds: trackIds, toPlaylist: playlistId)
         }
-        try? modelContext.save()
     }
 }

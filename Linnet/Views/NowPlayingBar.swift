@@ -62,7 +62,7 @@ struct NowPlayingBar: View {
                     }
                     .clipShape(RoundedRectangle(cornerRadius: 4))
 
-                // Track info — clickable
+                // Track info -- clickable
                 VStack(alignment: .leading, spacing: 2) {
                     Text(player.currentTrackTitle)
                         .font(.app(size: titleFontSize, weight: .medium))
@@ -89,11 +89,11 @@ struct NowPlayingBar: View {
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
                             .onTapGesture {
-                                guard player.currentQueueTrack?.artist != nil else { return }
+                                guard player.currentQueueTrack?.artistId != nil else { return }
                                 NotificationCenter.default.post(name: .navigateToCurrentArtist, object: nil)
                             }
                             .onHover { hovering in
-                                if hovering && player.currentQueueTrack?.artist != nil {
+                                if hovering && player.currentQueueTrack?.artistId != nil {
                                     NSCursor.pointingHand.push()
                                 } else {
                                     NSCursor.pop()

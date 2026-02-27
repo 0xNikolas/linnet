@@ -1,9 +1,8 @@
 import SwiftUI
-import SwiftData
 
 struct ContentArea: View {
     let sidebarItem: SidebarItem?
-    @Binding var highlightedTrackID: PersistentIdentifier?
+    @Binding var highlightedTrackID: Int64?
     @AppStorage("nowPlayingBarHeight") private var barHeight: Double = 56
 
     var body: some View {
@@ -26,6 +25,8 @@ struct ContentArea: View {
                     FolderBrowserView()
                 case .recentlyAdded:
                     AlbumGridView()
+                case .playlists:
+                    PlaylistsView()
                 case .playlist:
                     PlaylistsView()
                 }
@@ -37,6 +38,7 @@ struct ContentArea: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .safeAreaInset(edge: .bottom, spacing: 0) {
             Color.clear.frame(height: barHeight + 4)
+                .allowsHitTesting(false)
         }
     }
 }

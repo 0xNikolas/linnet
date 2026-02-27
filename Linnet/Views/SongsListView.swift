@@ -1,5 +1,4 @@
 import SwiftUI
-import SwiftData
 import AppKit
 import LinnetLibrary
 
@@ -59,11 +58,11 @@ private func formatFileSize(_ bytes: Int64) -> String {
 // MARK: - SongsListView (owns player environment + library mutations)
 
 struct SongsListView: View {
-    let tracks: [Track]
+    let tracks: [TrackInfo]
     var sections: [TrackSection] = []
-    @Binding var highlightedTrackID: PersistentIdentifier?
+    @Binding var highlightedTrackID: Int64?
     @Environment(PlayerViewModel.self) private var player
-    @Environment(\.modelContext) private var modelContext
+    @Environment(\.appDatabase) private var appDatabase
 
     var body: some View {
         if tracks.isEmpty {
@@ -89,52 +88,39 @@ struct SongsListView: View {
         }
     }
 
-    private func removeTracks(ids: Set<PersistentIdentifier>) {
+    private func removeTracks(ids: Set<Int64>) {
+        guard let db = appDatabase else { return }
         for id in ids {
-            if let track = tracks.first(where: { $0.id == id }) {
-                let album = track.album
-                let artist = track.artist
-                modelContext.delete(track)
-                if let album, album.tracks.isEmpty {
-                    modelContext.delete(album)
-                }
-                if let artist, artist.tracks.isEmpty {
-                    modelContext.delete(artist)
-                }
-            }
+            try? db.tracks.delete(id: id)
         }
-        try? modelContext.save()
+        try? db.albums.deleteOrphaned()
+        try? db.artists.deleteOrphaned()
     }
 }
 
 // MARK: - SongsTableView (no player environment -- immune to timer-driven redraws)
 
 private struct SongsTableView: View {
-    let tracks: [Track]
+    let tracks: [TrackInfo]
     let sections: [TrackSection]
-    @Binding var highlightedTrackID: PersistentIdentifier?
-    let onPlay: (Track, [Track], Int) -> Void
-    let onPlayNext: (Track) -> Void
-    let onPlayLater: (Track) -> Void
-    let onRemove: (Set<PersistentIdentifier>) -> Void
+    @Binding var highlightedTrackID: Int64?
+    let onPlay: (TrackInfo, [TrackInfo], Int) -> Void
+    let onPlayNext: (TrackInfo) -> Void
+    let onPlayLater: (TrackInfo) -> Void
+    let onRemove: (Set<Int64>) -> Void
 
-    @State private var selectedTrackIDs: Set<PersistentIdentifier> = []
-    @State private var sortOrder = [KeyPathComparator(\Track.title)]
-    @State private var sortedTracks: [Track] = []
+    @State private var selectedTrackIDs: Set<Int64> = []
+    @State private var sortOrder = [KeyPathComparator(\TrackInfo.title)]
+    @State private var sortedTracks: [TrackInfo] = []
     @State private var sortedSections: [TrackSection] = []
-    @SceneStorage("SongsTableConfig") private var columnCustomization: TableColumnCustomization<Track>
+    @SceneStorage("SongsTableConfig") private var columnCustomization: TableColumnCustomization<TrackInfo>
 
-    /// Lightweight cache of relationship data to avoid repeated SwiftData faulting during scroll.
-    @State private var artistNames: [PersistentIdentifier: String] = [:]
-    @State private var albumNames: [PersistentIdentifier: String] = [:]
-
-    @State private var scrollTarget: PersistentIdentifier?
+    @State private var scrollTarget: Int64?
     @State private var expandedSections: Set<String> = []
 
     private var isGrouped: Bool { !sections.isEmpty }
 
-    /// Flat playback queue respecting current display order.
-    private var playbackQueue: [Track] {
+    private var playbackQueue: [TrackInfo] {
         isGrouped ? sortedSections.flatMap(\.tracks) : sortedTracks
     }
 
@@ -142,7 +128,7 @@ private struct SongsTableView: View {
         ScrollViewReader { proxy in
             songsTable
                 .tableStyle(.inset)
-                .contextMenu(forSelectionType: PersistentIdentifier.self) { ids in
+                .contextMenu(forSelectionType: Int64.self) { ids in
                     contextMenuContent(for: ids)
                 } primaryAction: { ids in
                     let queue = playbackQueue
@@ -152,13 +138,11 @@ private struct SongsTableView: View {
                 }
                 .onChange(of: tracks, initial: true) { _, newTracks in
                     sortedTracks = newTracks.sorted(using: sortOrder)
-                    rebuildRelationshipCaches(from: newTracks)
                     rebuildSortedSections()
                     expandedSections.formUnion(sections.map(\.id))
                 }
                 .onChange(of: sections.map(\.id)) { _, newIDs in
                     rebuildSortedSections()
-                    // Expand new sections by default
                     expandedSections.formUnion(newIDs)
                 }
                 .onChange(of: sortOrder) { _, newOrder in
@@ -183,11 +167,10 @@ private struct SongsTableView: View {
         }
     }
 
-    // Extracted to help the Swift type checker with complex Table expressions
     @ViewBuilder
     private var songsTable: some View {
         if isGrouped {
-            Table(of: Track.self, selection: $selectedTrackIDs, sortOrder: $sortOrder, columnCustomization: $columnCustomization) {
+            Table(of: TrackInfo.self, selection: $selectedTrackIDs, sortOrder: $sortOrder, columnCustomization: $columnCustomization) {
                 coreColumns
                 metadataColumns
                 audioColumns
@@ -216,7 +199,7 @@ private struct SongsTableView: View {
                 }
             }
         } else {
-            Table(of: Track.self, selection: $selectedTrackIDs, sortOrder: $sortOrder, columnCustomization: $columnCustomization) {
+            Table(of: TrackInfo.self, selection: $selectedTrackIDs, sortOrder: $sortOrder, columnCustomization: $columnCustomization) {
                 coreColumns
                 metadataColumns
                 audioColumns
@@ -228,8 +211,8 @@ private struct SongsTableView: View {
         }
     }
 
-    @TableColumnBuilder<Track, KeyPathComparator<Track>>
-    private var coreColumns: some TableColumnContent<Track, KeyPathComparator<Track>> {
+    @TableColumnBuilder<TrackInfo, KeyPathComparator<TrackInfo>>
+    private var coreColumns: some TableColumnContent<TrackInfo, KeyPathComparator<TrackInfo>> {
         TableColumn("#", value: \.trackNumber) { track in
             Text("\(track.trackNumber)")
                 .font(.app(size: 13))
@@ -249,12 +232,12 @@ private struct SongsTableView: View {
                 }
             }
             .opacity(track.likedStatus == -1 ? 0.5 : 1.0)
-            .id(track.persistentModelID)
+            .id(track.id)
         }
         .customizationID("title")
 
         TableColumn("Artist") { track in
-            Text(artistNames[track.id] ?? "Unknown")
+            Text(track.artistName ?? "Unknown")
                 .font(.app(size: 13))
                 .foregroundStyle(.secondary)
         }
@@ -262,7 +245,7 @@ private struct SongsTableView: View {
         .customizationID("artist")
 
         TableColumn("Album") { track in
-            Text(albumNames[track.id] ?? "Unknown")
+            Text(track.albumName ?? "Unknown")
                 .font(.app(size: 13))
                 .foregroundStyle(.secondary)
         }
@@ -278,8 +261,8 @@ private struct SongsTableView: View {
         .customizationID("time")
     }
 
-    @TableColumnBuilder<Track, KeyPathComparator<Track>>
-    private var metadataColumns: some TableColumnContent<Track, KeyPathComparator<Track>> {
+    @TableColumnBuilder<TrackInfo, KeyPathComparator<TrackInfo>>
+    private var metadataColumns: some TableColumnContent<TrackInfo, KeyPathComparator<TrackInfo>> {
         TableColumn("Genre") { track in
             Text(track.genre ?? "")
                 .font(.app(size: 13))
@@ -308,8 +291,8 @@ private struct SongsTableView: View {
         .defaultVisibility(.hidden)
     }
 
-    @TableColumnBuilder<Track, KeyPathComparator<Track>>
-    private var audioColumns: some TableColumnContent<Track, KeyPathComparator<Track>> {
+    @TableColumnBuilder<TrackInfo, KeyPathComparator<TrackInfo>>
+    private var audioColumns: some TableColumnContent<TrackInfo, KeyPathComparator<TrackInfo>> {
         TableColumn("Format") { track in
             Text(track.codec ?? "")
                 .font(.app(size: 13))
@@ -362,50 +345,29 @@ private struct SongsTableView: View {
         }
     }
 
-    private func rebuildRelationshipCaches(from trackList: [Track]) {
-        var artists: [PersistentIdentifier: String] = [:]
-        var albums: [PersistentIdentifier: String] = [:]
-        artists.reserveCapacity(trackList.count)
-        albums.reserveCapacity(trackList.count)
-        for track in trackList {
-            artists[track.id] = track.artist?.name ?? "Unknown"
-            albums[track.id] = track.album?.name ?? "Unknown"
-        }
-        artistNames = artists
-        albumNames = albums
-    }
-
     @ViewBuilder
-    private func contextMenuContent(for ids: Set<PersistentIdentifier>) -> some View {
+    private func contextMenuContent(for ids: Set<Int64>) -> some View {
         let queue = playbackQueue
         if let id = ids.first, let index = queue.firstIndex(where: { $0.id == id }) {
             let track = queue[index]
-            Button("Play") {
-                onPlay(track, queue, index)
-            }
-            Button("Play Next") {
-                onPlayNext(track)
-            }
-            Button("Play Later") {
-                onPlayLater(track)
-            }
+            Button { onPlay(track, queue, index) } label: { Label("Play", systemImage: "play") }
+            Button { onPlayNext(track) } label: { Label("Play Next", systemImage: "text.line.first.and.arrowtriangle.forward") }
+            Button { onPlayLater(track) } label: { Label("Play Later", systemImage: "text.line.last.and.arrowtriangle.forward") }
             AddToPlaylistMenu(tracks: [track])
             LikeDislikeMenu(tracks: [track])
             Divider()
-            if let artist = track.artist {
-                Button("Go to Artist") {
-                    NotificationCenter.default.post(name: .navigateToArtist, object: nil, userInfo: ["artist": artist])
-                }
+            if let artistId = track.artistId {
+                Button {
+                    NotificationCenter.default.post(name: .navigateToArtist, object: nil, userInfo: ["artistId": artistId, "artistName": track.artistName ?? ""])
+                } label: { Label("Go to Artist", systemImage: "music.mic") }
             }
-            if let album = track.album {
-                Button("Go to Album") {
-                    NotificationCenter.default.post(name: .navigateToAlbum, object: nil, userInfo: ["album": album])
-                }
+            if let albumId = track.albumId {
+                Button {
+                    NotificationCenter.default.post(name: .navigateToAlbum, object: nil, userInfo: ["albumId": albumId])
+                } label: { Label("Go to Album", systemImage: "square.stack") }
             }
             Divider()
-            Button("Remove from Library", role: .destructive) {
-                onRemove(ids)
-            }
+            Button(role: .destructive) { onRemove(ids) } label: { Label("Remove from Library", systemImage: "trash") }
         }
     }
 }

@@ -1,5 +1,4 @@
 import SwiftUI
-import SwiftData
 import Observation
 import LinnetAudio
 import LinnetLibrary
@@ -47,12 +46,12 @@ public final class PlayerViewModel {
         eqBands = audioPlayer.equalizer.bands
     }
 
-    var currentQueueTrack: Track? {
+    var currentQueueTrack: TrackInfo? {
         guard queue.currentIndex < queuedTracks.count else { return nil }
         return queuedTracks[queue.currentIndex]
     }
 
-    var upcomingTracks: [Track] {
+    var upcomingTracks: [TrackInfo] {
         guard queue.currentIndex + 1 < queuedTracks.count else { return [] }
         return Array(queuedTracks[(queue.currentIndex + 1)...])
     }
@@ -70,17 +69,25 @@ public final class PlayerViewModel {
     private let audioPlayer = AudioPlayer()
     private let nowPlayingManager = NowPlayingManager.shared
     var queue = PlaybackQueue()
-    private var queuedTracks: [Track] = []
+    private var queuedTracks: [TrackInfo] = []
     private var timeUpdateTimer: Timer?
-    private var modelContext: ModelContext?
+    private var appDatabase: AppDatabase?
+
+    /// Cached watched folders for security-scoped access resolution.
+    private var cachedWatchedFolders: [WatchedFolderRecord] = []
 
     init() {
         eqBands = audioPlayer.equalizer.bands
         setupRemoteCommands()
     }
 
-    func setModelContext(_ context: ModelContext) {
-        self.modelContext = context
+    func setAppDatabase(_ db: AppDatabase) {
+        self.appDatabase = db
+        refreshCachedFolders()
+    }
+
+    private func refreshCachedFolders() {
+        cachedWatchedFolders = (try? appDatabase?.watchedFolders.fetchAll()) ?? []
     }
 
     func play() {
@@ -153,7 +160,7 @@ public final class PlayerViewModel {
         }
     }
 
-    func playTrack(_ track: Track, queue: [Track], startingAt index: Int = 0) {
+    func playTrack(_ track: TrackInfo, queue: [TrackInfo], startingAt index: Int = 0) {
         queuedTracks = queue
         let filePaths = queue.map(\.filePath)
         self.queue = PlaybackQueue()
@@ -167,12 +174,12 @@ public final class PlayerViewModel {
         }
     }
 
-    func addNext(_ track: Track) {
+    func addNext(_ track: TrackInfo) {
         queue.playNext(track.filePath)
         queuedTracks.insert(track, at: min(queue.currentIndex + 1, queuedTracks.count))
     }
 
-    func addLater(_ track: Track) {
+    func addLater(_ track: TrackInfo) {
         queue.playLater(track.filePath)
         queuedTracks.append(track)
     }
@@ -226,15 +233,19 @@ public final class PlayerViewModel {
     }
 
     func toggleLike() {
-        guard let track = currentQueueTrack else { return }
-        track.likedStatus = track.likedStatus == 1 ? 0 : 1
-        try? modelContext?.save()
+        guard var track = currentQueueTrack else { return }
+        let newStatus = track.likedStatus == 1 ? 0 : 1
+        track.likedStatus = newStatus
+        queuedTracks[queue.currentIndex] = track
+        try? appDatabase?.tracks.updateLikedStatus(filePath: track.filePath, status: newStatus)
     }
 
     func toggleDislike() {
-        guard let track = currentQueueTrack else { return }
-        track.likedStatus = track.likedStatus == -1 ? 0 : -1
-        try? modelContext?.save()
+        guard var track = currentQueueTrack else { return }
+        let newStatus = track.likedStatus == -1 ? 0 : -1
+        track.likedStatus = newStatus
+        queuedTracks[queue.currentIndex] = track
+        try? appDatabase?.tracks.updateLikedStatus(filePath: track.filePath, status: newStatus)
     }
 
     func loadAndPlay(filePath: String) {
@@ -266,11 +277,11 @@ public final class PlayerViewModel {
     private var activeSecurityScopedURLs: [String: URL] = [:]
 
     private func restoreFolderAccess(for filePath: String) {
-        guard let context = modelContext else { return }
-        let descriptor = FetchDescriptor<WatchedFolder>()
-        guard let folders = try? context.fetch(descriptor) else { return }
+        if cachedWatchedFolders.isEmpty {
+            refreshCachedFolders()
+        }
 
-        for folder in folders {
+        for folder in cachedWatchedFolders {
             if filePath.hasPrefix(folder.path), activeSecurityScopedURLs[folder.path] == nil {
                 if let bookmarkData = folder.bookmarkData {
                     var isStale = false
@@ -279,8 +290,12 @@ public final class PlayerViewModel {
                             activeSecurityScopedURLs[folder.path] = url
                         }
                         if isStale {
-                            folder.bookmarkData = try? url.bookmarkData(options: .withSecurityScope, includingResourceValuesForKeys: nil, relativeTo: nil)
-                            try? context.save()
+                            if let newBookmark = try? url.bookmarkData(options: .withSecurityScope, includingResourceValuesForKeys: nil, relativeTo: nil) {
+                                var updated = folder
+                                updated.bookmarkData = newBookmark
+                                try? appDatabase?.watchedFolders.update(updated)
+                                refreshCachedFolders()
+                            }
                         }
                     }
                 }
@@ -289,14 +304,21 @@ public final class PlayerViewModel {
         }
     }
 
-    private func updateMetadata(for track: Track) {
+    private func updateMetadata(for track: TrackInfo) {
         currentTrackTitle = track.title
-        currentTrackArtist = track.artist?.name ?? "Unknown Artist"
-        currentTrackAlbum = track.album?.name ?? ""
-        currentArtworkData = track.artworkData
-        track.lastPlayed = Date()
-        track.playCount += 1
-        try? modelContext?.save()
+        currentTrackArtist = track.artistName ?? "Unknown Artist"
+        currentTrackAlbum = track.albumName ?? ""
+        // Load artwork from GRDB artwork table
+        currentArtworkData = nil
+        if let db = appDatabase {
+            if let albumId = track.albumId {
+                currentArtworkData = try? db.artwork.fetchImageData(ownerType: "album", ownerId: albumId)
+            }
+            if currentArtworkData == nil, let trackId = try? db.tracks.fetchByFilePath(track.filePath)?.id {
+                currentArtworkData = try? db.artwork.fetchImageData(ownerType: "track", ownerId: trackId)
+            }
+        }
+        try? appDatabase?.tracks.updatePlayCount(filePath: track.filePath)
     }
 
     // MARK: - Time Updates

@@ -1,5 +1,4 @@
 import SwiftUI
-import SwiftData
 import LinnetLibrary
 
 struct SettingsView: View {
@@ -61,9 +60,13 @@ struct GeneralSettingsView: View {
 }
 
 struct LibrarySettingsView: View {
-    @Environment(\.modelContext) private var modelContext
-    @Query private var watchedFolders: [WatchedFolder]
+    @Environment(\.appDatabase) private var appDatabase
+    @State private var watchedFolders: [WatchedFolderRecord] = []
     @State private var libraryVM = LibraryViewModel()
+    @State private var dbLocationChoice: String = UserDefaults.standard.string(forKey: "databaseLocationType") ?? "appSupport"
+    @State private var dbLocationPath: String = UserDefaults.standard.string(forKey: "databaseLocationPath") ?? ""
+    @State private var showLocationChangeAlert = false
+    @State private var pendingLocation: DatabaseLocation?
 
     var body: some View {
         Form {
@@ -99,7 +102,10 @@ struct LibrarySettingsView: View {
                     panel.canChooseFiles = false
                     panel.allowsMultipleSelection = false
                     if panel.runModal() == .OK, let url = panel.url {
-                        libraryVM.addFolder(url: url, context: modelContext)
+                        if let db = appDatabase {
+                            libraryVM.addFolder(url: url, db: db)
+                            loadFolders()
+                        }
                     }
                 }
             }
@@ -113,51 +119,153 @@ struct LibrarySettingsView: View {
                     }
                 }
                 Button("Rescan Library") {
-                    libraryVM.rescanAll(context: modelContext)
+                    if let db = appDatabase {
+                        libraryVM.rescanAll(db: db)
+                    }
                 }
                 .disabled(libraryVM.isScanning || watchedFolders.isEmpty)
 
                 Button("Clear Library & Rescan") {
                     clearLibrary()
-                    libraryVM.rescanAll(context: modelContext)
+                    if let db = appDatabase {
+                        libraryVM.rescanAll(db: db)
+                    }
                 }
                 .disabled(libraryVM.isScanning || watchedFolders.isEmpty)
             }
-        }
-        .padding()
-    }
+            Section("Database Location") {
+                Picker("Store database in", selection: $dbLocationChoice) {
+                    Text("App Support (default)").tag("appSupport")
+                    Text("Music folder").tag("musicFolder")
+                    Text("Custom location...").tag("custom")
+                }
 
-    private func removeFolder(_ folder: WatchedFolder) {
-        // Remove tracks that belong to this folder
-        let folderPath = folder.path
-        let descriptor = FetchDescriptor<Track>(predicate: #Predicate { $0.filePath.starts(with: folderPath) })
-        if let tracks = try? modelContext.fetch(descriptor) {
-            for track in tracks {
-                modelContext.delete(track)
+                switch dbLocationChoice {
+                case "musicFolder":
+                    if let firstFolder = watchedFolders.first {
+                        Text(firstFolder.path + "/.linnet/linnet.db")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                    } else {
+                        Text("Add a watched folder first")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                case "custom":
+                    HStack {
+                        Text(dbLocationPath.isEmpty ? "No location chosen" : dbLocationPath)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                        Spacer()
+                        Button("Choose...") {
+                            let panel = NSOpenPanel()
+                            panel.canChooseDirectories = true
+                            panel.canChooseFiles = false
+                            panel.allowsMultipleSelection = false
+                            panel.message = "Choose a folder for the Linnet database"
+                            if panel.runModal() == .OK, let url = panel.url {
+                                dbLocationPath = url.path
+                            }
+                        }
+                        .controlSize(.small)
+                    }
+                default:
+                    Text(DatabaseLocation.appSupport.url.deletingLastPathComponent().path)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
+
+                Button("Apply") {
+                    applyLocationChange()
+                }
+                .disabled(!locationHasChanged)
             }
         }
-        modelContext.delete(folder)
-        cleanupOrphanedArtistsAndAlbums()
-        try? modelContext.save()
+        .padding()
+        .task { loadFolders() }
+        .alert("Move Database?", isPresented: $showLocationChangeAlert) {
+            Button("Move & Restart", role: .destructive) {
+                performLocationChange()
+            }
+            Button("Cancel", role: .cancel) {
+                pendingLocation = nil
+            }
+        } message: {
+            Text("The database will be copied to the new location. The app needs to restart for changes to take effect.")
+        }
+    }
+
+    private func loadFolders() {
+        watchedFolders = (try? appDatabase?.watchedFolders.fetchAll()) ?? []
+    }
+
+    private func removeFolder(_ folder: WatchedFolderRecord) {
+        guard let db = appDatabase else { return }
+        try? db.tracks.deleteByFolder(pathPrefix: folder.path)
+        try? db.watchedFolders.deleteByPath(folder.path)
+        try? db.albums.deleteOrphaned()
+        try? db.artists.deleteOrphaned()
+        loadFolders()
     }
 
     private func clearLibrary() {
-        try? modelContext.fetch(FetchDescriptor<Track>()).forEach { modelContext.delete($0) }
-        try? modelContext.fetch(FetchDescriptor<Album>()).forEach { modelContext.delete($0) }
-        try? modelContext.fetch(FetchDescriptor<Artist>()).forEach { modelContext.delete($0) }
-        try? modelContext.save()
+        guard let db = appDatabase else { return }
+        try? db.tracks.deleteByFolder(pathPrefix: "/")
+        try? db.albums.deleteOrphaned()
+        try? db.artists.deleteOrphaned()
+        loadFolders()
     }
 
-    private func cleanupOrphanedArtistsAndAlbums() {
-        if let albums = try? modelContext.fetch(FetchDescriptor<Album>()) {
-            for album in albums where album.tracks.isEmpty {
-                modelContext.delete(album)
-            }
+    private var locationHasChanged: Bool {
+        let savedType = UserDefaults.standard.string(forKey: "databaseLocationType") ?? "appSupport"
+        let savedPath = UserDefaults.standard.string(forKey: "databaseLocationPath") ?? ""
+        if dbLocationChoice != savedType { return true }
+        if dbLocationChoice != "appSupport" && dbLocationPath != savedPath { return true }
+        return false
+    }
+
+    private func resolvedNewLocation() -> DatabaseLocation? {
+        switch dbLocationChoice {
+        case "musicFolder":
+            guard let firstFolder = watchedFolders.first else { return nil }
+            return .musicFolder(URL(filePath: firstFolder.path))
+        case "custom":
+            guard !dbLocationPath.isEmpty else { return nil }
+            return .custom(URL(filePath: dbLocationPath).appendingPathComponent("linnet.db"))
+        default:
+            return .appSupport
         }
-        if let artists = try? modelContext.fetch(FetchDescriptor<Artist>()) {
-            for artist in artists where artist.tracks.isEmpty {
-                modelContext.delete(artist)
-            }
+    }
+
+    private func applyLocationChange() {
+        guard let newLocation = resolvedNewLocation() else { return }
+        pendingLocation = newLocation
+        showLocationChangeAlert = true
+    }
+
+    private func performLocationChange() {
+        guard let newLocation = pendingLocation else { return }
+        let currentLocation = DatabaseLocation.saved()
+
+        do {
+            try DatabaseLocation.copyDatabase(from: currentLocation, to: newLocation)
+            newLocation.save()
+
+            // Restart the app
+            let task = Process()
+            task.launchPath = "/usr/bin/open"
+            task.arguments = ["-n", Bundle.main.bundlePath]
+            try task.run()
+            NSApplication.shared.terminate(nil)
+        } catch {
+            // If copy fails, don't change the setting
+            pendingLocation = nil
         }
     }
 }

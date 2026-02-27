@@ -7,9 +7,16 @@ let package = Package(
     products: [
         .library(name: "LinnetLibrary", targets: ["LinnetLibrary"]),
     ],
-    dependencies: [],
+    dependencies: [
+        .package(url: "https://github.com/groue/GRDB.swift.git", from: "7.4.1"),
+    ],
     targets: [
-        .target(name: "LinnetLibrary"),
+        .target(
+            name: "LinnetLibrary",
+            dependencies: [
+                .product(name: "GRDB", package: "GRDB.swift"),
+            ]
+        ),
         .testTarget(name: "LinnetLibraryTests", dependencies: ["LinnetLibrary"]),
     ]
 )

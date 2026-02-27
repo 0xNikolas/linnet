@@ -1,5 +1,5 @@
 import Foundation
-import SwiftData
+import GRDB
 
 @MainActor
 @Observable
@@ -23,13 +23,21 @@ public final class ArtworkService {
 
     public init() {}
 
-    // MARK: - Album Artwork
+    // MARK: - Album Artwork (GRDB)
 
-    public func fetchAlbumArtwork(for album: Album, context: ModelContext, force: Bool = false) async -> Bool {
-        let key = "album:\(album.name):\(album.artistName ?? "")"
+    public func fetchAlbumArtwork(
+        albumId: Int64,
+        albumName: String,
+        artistName: String?,
+        db: AppDatabase,
+        force: Bool = false
+    ) async -> Bool {
+        let key = "album:\(albumName):\(artistName ?? "")"
         guard !inFlightRequests.contains(key) else { return false }
         if !force && attemptedLookups.contains(key) { return false }
         if !force && autoFetchCount >= Self.maxAutoFetches { return false }
+
+        guard let artistName else { return false }
 
         inFlightRequests.insert(key)
         if !force { autoFetchCount += 1 }
@@ -39,12 +47,6 @@ public final class ArtworkService {
             if !force { autoFetchCount -= 1 }
         }
 
-        guard let artistName = album.artistName ?? album.artist?.name else {
-            return false
-        }
-        let albumName = album.name
-
-        // All network I/O off main actor
         let imageData = await Self.lookupAlbumArtwork(
             albumName: albumName,
             artistName: artistName,
@@ -55,19 +57,24 @@ public final class ArtworkService {
         guard let imageData else { return false }
         guard !Task.isCancelled else { return false }
 
-        // Model update on main actor
-        album.artworkData = imageData
-        for track in album.tracks where track.artworkData == nil {
-            track.artworkData = imageData
-        }
-        try? context.save()
+        try? db.artwork.upsert(
+            ownerType: "album",
+            ownerId: albumId,
+            imageData: imageData,
+            thumbnailData: nil
+        )
         return true
     }
 
-    // MARK: - Artist Artwork
+    // MARK: - Artist Artwork (GRDB)
 
-    public func fetchArtistArtwork(for artist: Artist, context: ModelContext, force: Bool = false) async -> Bool {
-        let key = "artist:\(artist.name)"
+    public func fetchArtistArtwork(
+        artistId: Int64,
+        artistName: String,
+        db: AppDatabase,
+        force: Bool = false
+    ) async -> Bool {
+        let key = "artist:\(artistName)"
         guard !inFlightRequests.contains(key) else { return false }
         if !force && attemptedLookups.contains(key) { return false }
         if !force && autoFetchCount >= Self.maxAutoFetches { return false }
@@ -80,10 +87,8 @@ public final class ArtworkService {
             if !force { autoFetchCount -= 1 }
         }
 
-        let artistName = artist.name
         let apiKey = fanartTVAPIKey
 
-        // All network I/O off main actor
         let imageData = await Self.lookupArtistArtwork(
             artistName: artistName,
             fanartAPIKey: apiKey,
@@ -94,9 +99,12 @@ public final class ArtworkService {
         guard let imageData else { return false }
         guard !Task.isCancelled else { return false }
 
-        // Model update on main actor
-        artist.artworkData = imageData
-        try? context.save()
+        try? db.artwork.upsert(
+            ownerType: "artist",
+            ownerId: artistId,
+            imageData: imageData,
+            thumbnailData: nil
+        )
         return true
     }
 

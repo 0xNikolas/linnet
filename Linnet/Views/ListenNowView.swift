@@ -1,37 +1,17 @@
 import SwiftUI
-import SwiftData
 import LinnetLibrary
 
 struct ListenNowView: View {
-    @Query(sort: \Album.name) private var albums: [Album]
-    @Query(sort: \Track.dateAdded, order: .reverse) private var recentTracks: [Track]
+    @Environment(\.appDatabase) private var appDatabase
     @Environment(PlayerViewModel.self) private var player
     @Environment(ArtworkService.self) private var artworkService
-    @Environment(\.modelContext) private var modelContext
+    @Environment(\.navigationPath) private var navigationPath
+    @State private var albums: [AlbumInfo] = []
+    @State private var recentTracks: [TrackInfo] = []
     @State private var searchText = ""
     @State private var isSearchPresented = false
-    @State private var selectedTrackID: PersistentIdentifier?
-    @State private var selectedAlbumID: PersistentIdentifier?
-    @Environment(\.navigationPath) private var navigationPath
-    private var filteredRecentTracks: [Track] {
-        let source = Array(recentTracks.prefix(20))
-        if searchText.isEmpty { return source }
-        let query = searchText
-        return source.filter { track in
-            track.title.searchContains(query) ||
-            (track.artist?.name ?? "").searchContains(query) ||
-            (track.album?.name ?? "").searchContains(query)
-        }
-    }
-
-    private var filteredAlbums: [Album] {
-        if searchText.isEmpty { return albums }
-        let query = searchText
-        return albums.filter { album in
-            album.name.searchContains(query) ||
-            (album.artistName ?? "").searchContains(query)
-        }
-    }
+    @State private var selectedTrackID: Int64?
+    @State private var selectedAlbumID: Int64?
 
     var body: some View {
         ScrollView {
@@ -45,126 +25,48 @@ struct ListenNowView: View {
                     ContentUnavailableView("Welcome to Linnet", systemImage: "music.note.house", description: Text("Add a music folder in Settings to get started."))
                         .frame(maxWidth: .infinity, minHeight: 300)
                 } else {
-                    if !filteredRecentTracks.isEmpty {
-                        let displayedTracks = Array(filteredRecentTracks.prefix(10))
+                    if !recentTracks.isEmpty {
+                        let displayedTracks = Array(recentTracks.prefix(10))
                         HorizontalScrollRow(title: "Recently Added") {
                             ForEach(Array(displayedTracks.enumerated()), id: \.element.id) { index, track in
-                                VStack(alignment: .leading, spacing: 6) {
-                                    RoundedRectangle(cornerRadius: 8)
-                                        .fill(.quaternary)
-                                        .frame(width: 160, height: 160)
-                                        .overlay {
-                                            if let artData = track.artworkData, let img = NSImage(data: artData) {
-                                                Image(nsImage: img)
-                                                    .resizable()
-                                                    .scaledToFill()
-                                            } else {
-                                                Image(systemName: "music.note")
-                                                    .font(.app(size: 30))
-                                                    .foregroundStyle(.secondary)
-                                            }
-                                        }
-                                        .clipShape(RoundedRectangle(cornerRadius: 8))
-
-                                    Text(track.title)
-                                        .font(.app(size: 13, weight: .medium))
-                                        .lineLimit(1)
-                                    Text(track.artist?.name ?? "Unknown")
-                                        .font(.app(size: 11))
-                                        .foregroundStyle(.secondary)
-                                        .lineLimit(1)
-                                }
-                                .frame(width: 160)
-                                .padding(6)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 10)
-                                        .fill(selectedTrackID == track.persistentModelID
-                                              ? Color.accentColor.opacity(0.15)
-                                              : Color.clear)
-                                )
-                                .contentShape(Rectangle())
-                                .onClicks(single: {
-                                    selectedTrackID = track.persistentModelID
-                                    selectedAlbumID = nil
-                                }, double: {
-                                    player.playTrack(track, queue: displayedTracks, startingAt: index)
-                                })
-                                .task {
-                                    guard track.artworkData == nil, let album = track.album, album.artworkData == nil else { return }
-                                    await artworkService.fetchAlbumArtwork(for: album, context: modelContext)
-                                }
-                                .contextMenu {
-                                    Button("Play") {
+                                ListenNowTrackCard(
+                                    track: track,
+                                    isSelected: selectedTrackID == track.id,
+                                    onSelect: {
+                                        selectedTrackID = track.id
+                                        selectedAlbumID = nil
+                                    },
+                                    onPlay: {
                                         player.playTrack(track, queue: displayedTracks, startingAt: index)
-                                    }
-                                    Button("Play Next") {
-                                        player.addNext(track)
-                                    }
-                                    Button("Play Later") {
-                                        player.addLater(track)
-                                    }
-                                    AddToPlaylistMenu(tracks: [track])
-                                    LikeDislikeMenu(tracks: [track])
-                                    Divider()
-                                    if let artist = track.artist {
-                                        Button("Go to Artist") {
-                                            NotificationCenter.default.post(name: .navigateToArtist, object: nil, userInfo: ["artist": artist])
-                                        }
-                                    }
-                                    if let album = track.album {
-                                        Button("Go to Album") {
-                                            NotificationCenter.default.post(name: .navigateToAlbum, object: nil, userInfo: ["album": album])
-                                        }
-                                    }
-                                    Divider()
-                                    Button("Remove from Library", role: .destructive) {
+                                    },
+                                    onPlayNext: { player.addNext(track) },
+                                    onPlayLater: { player.addLater(track) },
+                                    displayedTracks: displayedTracks,
+                                    index: index,
+                                    onRemove: {
                                         removeTrack(track)
                                     }
-                                }
+                                )
                             }
                         }
                     }
 
-                    if !filteredAlbums.isEmpty {
+                    if !albums.isEmpty {
                         HorizontalScrollRow(title: "Albums") {
-                            ForEach(filteredAlbums.prefix(10)) { album in
-                                AlbumCard(
-                                    name: album.name,
-                                    artist: album.artistName ?? "Unknown",
-                                    artwork: album.artworkData.flatMap { NSImage(data: $0) }
+                            ForEach(albums.prefix(10)) { album in
+                                ListenNowAlbumCard(
+                                    album: album,
+                                    isSelected: selectedAlbumID == album.id,
+                                    onSelect: {
+                                        selectedAlbumID = album.id
+                                        selectedTrackID = nil
+                                    },
+                                    onNavigate: {
+                                        let record = AlbumRecord(id: album.id, name: album.name, artistName: album.artistName, year: album.year, artistId: album.artistId)
+                                        navigationPath.wrappedValue.append(record)
+                                    },
+                                    onRemove: { removeAlbum(album) }
                                 )
-                                .frame(width: 160)
-                                .padding(6)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 10)
-                                        .fill(selectedAlbumID == album.persistentModelID
-                                              ? Color.accentColor.opacity(0.15)
-                                              : Color.clear)
-                                )
-                                .contentShape(Rectangle())
-                                .onClicks(single: {
-                                    selectedAlbumID = album.persistentModelID
-                                    selectedTrackID = nil
-                                }, double: {
-                                    navigationPath.wrappedValue.append(album)
-                                })
-                                .task {
-                                    guard album.artworkData == nil else { return }
-                                    await artworkService.fetchAlbumArtwork(for: album, context: modelContext)
-                                }
-                                .contextMenu {
-                                    LikeDislikeMenu(tracks: album.tracks)
-                                    Divider()
-                                    if let artist = album.artist {
-                                        Button("Go to Artist") {
-                                            NotificationCenter.default.post(name: .navigateToArtist, object: nil, userInfo: ["artist": artist])
-                                        }
-                                    }
-                                    Divider()
-                                    Button("Remove from Library", role: .destructive) {
-                                        removeAlbum(album)
-                                    }
-                                }
                             }
                         }
                     }
@@ -198,30 +100,180 @@ struct ListenNowView: View {
         .onReceive(NotificationCenter.default.publisher(for: .focusSearch)) { _ in
             isSearchPresented = true
         }
+        .task { loadData() }
+        .onChange(of: searchText) { _, _ in loadData() }
     }
 
-    private func removeTrack(_ track: Track) {
-        let album = track.album
-        let artist = track.artist
-        modelContext.delete(track)
-        if let album, album.tracks.isEmpty {
-            modelContext.delete(album)
+    private func loadData() {
+        guard let db = appDatabase else { return }
+        if searchText.isEmpty {
+            albums = (try? db.albums.fetchAllInfo()) ?? []
+            recentTracks = (try? db.tracks.fetchRecentlyAddedInfo(limit: 20)) ?? []
+        } else {
+            albums = (try? db.albums.searchInfo(query: searchText)) ?? []
+            recentTracks = (try? db.tracks.searchAllInfo(query: searchText, limit: 20)) ?? []
         }
-        if let artist, artist.tracks.isEmpty {
-            modelContext.delete(artist)
-        }
-        try? modelContext.save()
     }
 
-    private func removeAlbum(_ album: Album) {
-        let artist = album.artist
-        for track in album.tracks {
-            modelContext.delete(track)
+    private func removeTrack(_ track: TrackInfo) {
+        guard let db = appDatabase else { return }
+        try? db.tracks.delete(id: track.id)
+        try? db.albums.deleteOrphaned()
+        try? db.artists.deleteOrphaned()
+        loadData()
+    }
+
+    private func removeAlbum(_ album: AlbumInfo) {
+        guard let db = appDatabase else { return }
+        let tracks = (try? db.tracks.fetchInfoByAlbum(id: album.id)) ?? []
+        for track in tracks {
+            try? db.tracks.delete(id: track.id)
         }
-        modelContext.delete(album)
-        if let artist, artist.tracks.isEmpty {
-            modelContext.delete(artist)
+        try? db.albums.delete(id: album.id)
+        try? db.artwork.delete(ownerType: "album", ownerId: album.id)
+        try? db.artists.deleteOrphaned()
+        loadData()
+    }
+}
+
+// MARK: - Track Card
+
+private struct ListenNowTrackCard: View {
+    let track: TrackInfo
+    let isSelected: Bool
+    let onSelect: () -> Void
+    let onPlay: () -> Void
+    let onPlayNext: () -> Void
+    let onPlayLater: () -> Void
+    let displayedTracks: [TrackInfo]
+    let index: Int
+    let onRemove: () -> Void
+
+    @Environment(ArtworkService.self) private var artworkService
+    @Environment(\.appDatabase) private var appDatabase
+    @State private var artwork: NSImage?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            RoundedRectangle(cornerRadius: 8)
+                .fill(.quaternary)
+                .frame(width: 160, height: 160)
+                .overlay {
+                    if let artwork {
+                        Image(nsImage: artwork)
+                            .resizable()
+                            .scaledToFill()
+                    } else {
+                        Image(systemName: "music.note")
+                            .font(.app(size: 30))
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+
+            Text(track.title)
+                .font(.app(size: 13, weight: .medium))
+                .lineLimit(1)
+            Text(track.artistName ?? "Unknown")
+                .font(.app(size: 11))
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
         }
-        try? modelContext.save()
+        .frame(width: 160)
+        .padding(6)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(isSelected ? Color.accentColor.opacity(0.15) : Color.clear)
+        )
+        .contentShape(Rectangle())
+        .onClicks(single: { onSelect() }, double: { onPlay() })
+        .task {
+            loadArtwork()
+            guard artwork == nil, let albumId = track.albumId, let db = appDatabase else { return }
+            let found = await artworkService.fetchAlbumArtwork(albumId: albumId, albumName: track.albumName ?? "", artistName: track.artistName, db: db)
+            if found { loadArtwork() }
+        }
+        .contextMenu {
+            Button { onPlay() } label: { Label("Play", systemImage: "play") }
+            Button { onPlayNext() } label: { Label("Play Next", systemImage: "text.line.first.and.arrowtriangle.forward") }
+            Button { onPlayLater() } label: { Label("Play Later", systemImage: "text.line.last.and.arrowtriangle.forward") }
+            AddToPlaylistMenu(tracks: [track])
+            LikeDislikeMenu(tracks: [track])
+            Divider()
+            if let artistId = track.artistId {
+                Button {
+                    NotificationCenter.default.post(name: .navigateToArtist, object: nil, userInfo: ["artistId": artistId, "artistName": track.artistName ?? ""])
+                } label: { Label("Go to Artist", systemImage: "music.mic") }
+            }
+            if let albumId = track.albumId {
+                Button {
+                    NotificationCenter.default.post(name: .navigateToAlbum, object: nil, userInfo: ["albumId": albumId])
+                } label: { Label("Go to Album", systemImage: "square.stack") }
+            }
+            Divider()
+            Button(role: .destructive) { onRemove() } label: { Label("Remove from Library", systemImage: "trash") }
+        }
+    }
+
+    private func loadArtwork() {
+        guard let db = appDatabase, let albumId = track.albumId,
+              let data = try? db.artwork.fetchImageData(ownerType: "album", ownerId: albumId),
+              let img = NSImage(data: data) else { return }
+        artwork = img
+    }
+}
+
+// MARK: - Album Card
+
+private struct ListenNowAlbumCard: View {
+    let album: AlbumInfo
+    let isSelected: Bool
+    let onSelect: () -> Void
+    let onNavigate: () -> Void
+    let onRemove: () -> Void
+
+    @Environment(ArtworkService.self) private var artworkService
+    @Environment(\.appDatabase) private var appDatabase
+    @State private var artwork: NSImage?
+
+    var body: some View {
+        AlbumCard(
+            name: album.name,
+            artist: album.artistName ?? "Unknown",
+            artwork: artwork
+        )
+        .frame(width: 160)
+        .padding(6)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(isSelected ? Color.accentColor.opacity(0.15) : Color.clear)
+        )
+        .contentShape(Rectangle())
+        .onClicks(single: { onSelect() }, double: { onNavigate() })
+        .task {
+            loadArtwork()
+            guard artwork == nil, let db = appDatabase else { return }
+            let found = await artworkService.fetchAlbumArtwork(albumId: album.id, albumName: album.name, artistName: album.artistName, db: db)
+            if found { loadArtwork() }
+        }
+        .contextMenu {
+            let tracks = (try? appDatabase?.tracks.fetchInfoByAlbum(id: album.id)) ?? []
+            LikeDislikeMenu(tracks: tracks)
+            Divider()
+            if let artistId = album.artistId {
+                Button {
+                    NotificationCenter.default.post(name: .navigateToArtist, object: nil, userInfo: ["artistId": artistId, "artistName": album.artistName ?? ""])
+                } label: { Label("Go to Artist", systemImage: "music.mic") }
+            }
+            Divider()
+            Button(role: .destructive) { onRemove() } label: { Label("Remove from Library", systemImage: "trash") }
+        }
+    }
+
+    private func loadArtwork() {
+        guard let db = appDatabase,
+              let data = try? db.artwork.fetchImageData(ownerType: "album", ownerId: album.id),
+              let img = NSImage(data: data) else { return }
+        artwork = img
     }
 }

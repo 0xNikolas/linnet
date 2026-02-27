@@ -1,20 +1,16 @@
 import SwiftUI
-import SwiftData
 import LinnetLibrary
 
 struct PlaylistsView: View {
-    @Environment(\.modelContext) private var modelContext
+    @Environment(\.appDatabase) private var appDatabase
     @Environment(\.navigationPath) private var navigationPath
-    @Query(sort: \Playlist.createdAt) private var playlists: [Playlist]
-    @State private var selectedPlaylistID: PersistentIdentifier?
+    @State private var playlists: [PlaylistRecord] = []
+    @State private var entryCounts: [Int64: Int] = [:]
+    @State private var selectedPlaylistID: Int64?
+    @AppStorage("playlistSortOption") private var sortOption: PlaylistSortOption = .dateCreated
+    @AppStorage("playlistSortDirection") private var sortDirection: SortDirection = .ascending
     @State private var searchText = ""
     @State private var isSearchPresented = false
-
-    private var filteredPlaylists: [Playlist] {
-        if searchText.isEmpty { return playlists }
-        let query = searchText
-        return playlists.filter { $0.name.searchContains(query) }
-    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -22,6 +18,8 @@ struct PlaylistsView: View {
                 Text("Playlists")
                     .font(.largeTitle.bold())
                 Spacer()
+                SortFilterMenuButton(sortOption: $sortOption, sortDirection: $sortDirection)
+
                 Button(action: createPlaylist) {
                     Label("New Playlist", systemImage: "plus")
                 }
@@ -29,7 +27,7 @@ struct PlaylistsView: View {
             }
             .padding(20)
 
-            if filteredPlaylists.isEmpty {
+            if playlists.isEmpty {
                 ContentUnavailableView(
                     searchText.isEmpty ? "No Playlists" : "No Results",
                     systemImage: searchText.isEmpty ? "music.note.list" : "magnifyingglass",
@@ -39,7 +37,7 @@ struct PlaylistsView: View {
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                List(filteredPlaylists, id: \.persistentModelID, selection: $selectedPlaylistID) { playlist in
+                List(playlists, id: \.id, selection: $selectedPlaylistID) { playlist in
                     HStack(spacing: 12) {
                         RoundedRectangle(cornerRadius: 4)
                             .fill(.quaternary)
@@ -52,19 +50,17 @@ struct PlaylistsView: View {
                         VStack(alignment: .leading) {
                             Text(playlist.name)
                                 .font(.app(size: 14))
-                            Text("\(playlist.entries.count) songs")
+                            Text("\(entryCounts[playlist.id!] ?? 0) songs")
                                 .font(.app(size: 12))
                                 .foregroundStyle(.secondary)
                         }
                     }
                     .padding(.vertical, 4)
                     .contextMenu {
-                        Button("Delete Playlist", role: .destructive) {
-                            deletePlaylist(playlist)
-                        }
+                        Button(role: .destructive) { deletePlaylist(playlist) } label: { Label("Delete Playlist", systemImage: "trash") }
                     }
                 }
-                .contextMenu(forSelectionType: PersistentIdentifier.self, menu: { _ in }, primaryAction: { identifiers in
+                .contextMenu(forSelectionType: Int64.self, menu: { _ in }, primaryAction: { identifiers in
                     guard let id = identifiers.first else { return }
                     navigationPath.wrappedValue.append(id)
                 })
@@ -74,16 +70,45 @@ struct PlaylistsView: View {
         .onReceive(NotificationCenter.default.publisher(for: .focusSearch)) { _ in
             isSearchPresented = true
         }
+        .task { loadPlaylists() }
+        .onChange(of: searchText) { _, _ in loadPlaylists() }
+        .onChange(of: sortOption) { _, _ in loadPlaylists() }
+        .onChange(of: sortDirection) { _, _ in loadPlaylists() }
+    }
+
+    private func loadPlaylists() {
+        guard let db = appDatabase else { return }
+        if searchText.isEmpty {
+            let results = (try? db.playlists.fetchAllSorted(orderedBy: sortOption.sqlColumn, direction: sortDirection.sql)) ?? []
+            playlists = results.map(\.playlist)
+            var counts: [Int64: Int] = [:]
+            for result in results {
+                if let id = result.playlist.id {
+                    counts[id] = result.songCount
+                }
+            }
+            entryCounts = counts
+        } else {
+            playlists = (try? db.playlists.search(query: searchText)) ?? []
+            var counts: [Int64: Int] = [:]
+            for playlist in playlists {
+                if let id = playlist.id {
+                    counts[id] = (try? db.playlists.entryCount(playlistId: id)) ?? 0
+                }
+            }
+            entryCounts = counts
+        }
     }
 
     private func createPlaylist() {
-        let playlist = Playlist(name: "New Playlist")
-        modelContext.insert(playlist)
-        try? modelContext.save()
+        var playlist = PlaylistRecord(name: "New Playlist")
+        _ = try? appDatabase?.playlists.insert(&playlist)
+        loadPlaylists()
     }
 
-    private func deletePlaylist(_ playlist: Playlist) {
-        modelContext.delete(playlist)
-        try? modelContext.save()
+    private func deletePlaylist(_ playlist: PlaylistRecord) {
+        guard let id = playlist.id else { return }
+        try? appDatabase?.playlists.delete(id: id)
+        loadPlaylists()
     }
 }
