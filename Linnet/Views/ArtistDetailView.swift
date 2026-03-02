@@ -6,6 +6,7 @@ import UniformTypeIdentifiers
 // File-level storage -- survives SwiftUI view lifecycle
 private nonisolated(unsafe) var _albumCardLastClickTime: Date = .distantPast
 private nonisolated(unsafe) var _artistDetailCache: [Int64: ArtistDetailData] = [:]
+private nonisolated(unsafe) var _artistArtworkCache: [Int64: NSImage] = [:]
 
 private struct ArtistDetailData: Sendable {
     let allTracks: [TrackInfo]
@@ -23,10 +24,12 @@ struct ArtistDetailView: View {
     @State private var isFetchingArtwork = false
     @State private var observer: DatabaseObserver<ArtistDetailData>?
     @State private var artworkImage: NSImage?
-    @State private var hasLoaded = false
+    @State private var cachedData: ArtistDetailData?
+
+    private var data: ArtistDetailData? { observer?.value ?? cachedData }
 
     private var allTracks: [TrackInfo] {
-        var tracks = observer?.value.allTracks ?? []
+        var tracks = data?.allTracks ?? []
         tracks.sort { lhs, rhs in
             let lhsYear = lhs.year ?? 0
             let rhsYear = rhs.year ?? 0
@@ -40,7 +43,8 @@ struct ArtistDetailView: View {
         return tracks
     }
 
-    private var albums: [AlbumInfo] { observer?.value.albums ?? [] }
+    private var albums: [AlbumInfo] { data?.albums ?? [] }
+    private var hasLoaded: Bool { data != nil }
 
     var body: some View {
         ScrollViewReader { proxy in
@@ -204,47 +208,46 @@ struct ArtistDetailView: View {
             }
             .animation(.easeIn(duration: 0.2), value: hasLoaded)
         }
+        .onAppear {
+            guard let artistId = artist.id else { return }
+            if let cached = _artistDetailCache[artistId] {
+                cachedData = cached
+            }
+            if let cachedImg = _artistArtworkCache[artistId] {
+                artworkImage = cachedImg
+            }
+        }
         .task {
             guard let db = appDatabase, let artistId = artist.id else { return }
-            // Use cached data for instant display, fall back to DB read
-            let initial: ArtistDetailData
-            if let cached = _artistDetailCache[artistId] {
-                initial = cached
-                hasLoaded = true
-            } else {
-                do {
-                    initial = try db.pool.read { db in
-                        let trackSql = """
-                            SELECT track.*, artist.name AS artistName, album.name AS albumName
-                            FROM track
-                            LEFT JOIN artist ON track.artistId = artist.id
-                            LEFT JOIN album ON track.albumId = album.id
-                            WHERE track.artistId = ?
-                            ORDER BY track.title
-                            """
-                        let tracks = try TrackInfo.fetchAll(db, sql: trackSql, arguments: [artistId])
-                        let albumSql = """
-                            SELECT album.id, album.name, album.artistName, album.year, album.artistId,
-                                COUNT(track.id) AS trackCount
-                            FROM album
-                            LEFT JOIN track ON track.albumId = album.id
-                            WHERE album.artistId = ?
-                            GROUP BY album.id
-                            ORDER BY album.year DESC, album.name
-                            """
-                        let albums = try AlbumInfo.fetchAll(db, sql: albumSql, arguments: [artistId])
-                        return ArtistDetailData(allTracks: tracks, albums: albums)
-                    }
-                } catch {
-                    initial = ArtistDetailData(allTracks: [], albums: [])
-                }
-            }
+            let initial = cachedData ?? (
+                (try? db.pool.read { db in
+                    let trackSql = """
+                        SELECT track.*, artist.name AS artistName, album.name AS albumName
+                        FROM track
+                        LEFT JOIN artist ON track.artistId = artist.id
+                        LEFT JOIN album ON track.albumId = album.id
+                        WHERE track.artistId = ?
+                        ORDER BY track.title
+                        """
+                    let tracks = try TrackInfo.fetchAll(db, sql: trackSql, arguments: [artistId])
+                    let albumSql = """
+                        SELECT album.id, album.name, album.artistName, album.year, album.artistId,
+                            COUNT(track.id) AS trackCount
+                        FROM album
+                        LEFT JOIN track ON track.albumId = album.id
+                        WHERE album.artistId = ?
+                        GROUP BY album.id
+                        ORDER BY album.year DESC, album.name
+                        """
+                    let albums = try AlbumInfo.fetchAll(db, sql: albumSql, arguments: [artistId])
+                    return ArtistDetailData(allTracks: tracks, albums: albums)
+                }) ?? ArtistDetailData(allTracks: [], albums: [])
+            )
             observer = DatabaseObserver(
                 initial: initial,
                 in: db.pool,
                 observation: makeObservation(artistId: artistId)
             )
-            hasLoaded = true
         }
         .onChange(of: observer?.value.allTracks.count) {
             guard let artistId = artist.id, let data = observer?.value else { return }
@@ -305,6 +308,7 @@ struct ArtistDetailView: View {
             return
         }
         artworkImage = img
+        _artistArtworkCache[artistId] = img
     }
 
     private func removeTrack(_ track: TrackInfo) {
@@ -342,7 +346,9 @@ struct ArtistDetailView: View {
            let data = try? Data(contentsOf: url) {
             guard let artistId = artist.id, let db = appDatabase else { return }
             do { try db.artwork.upsert(ownerType: "artist", ownerId: artistId, imageData: data, thumbnailData: nil) } catch { Log.database.error("Failed to upsert artist artwork \(artistId): \(error)") }
-            artworkImage = NSImage(data: data)
+            let img = NSImage(data: data)
+            artworkImage = img
+            if let img { _artistArtworkCache[artistId] = img }
         }
     }
 }
