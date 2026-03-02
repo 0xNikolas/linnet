@@ -54,7 +54,8 @@ public struct PlaybackQueue: Sendable {
     }
 
     public mutating func playNext(_ track: String) {
-        tracks.insert(track, at: currentIndex + 1)
+        let insertAt = min(currentIndex + 1, tracks.count)
+        tracks.insert(track, at: insertAt)
     }
 
     public mutating func playLater(_ track: String) {

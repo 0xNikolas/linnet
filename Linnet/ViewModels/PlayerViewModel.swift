@@ -186,13 +186,43 @@ public final class PlayerViewModel {
     }
 
     func addNext(_ track: TrackInfo) {
+        let wasEmpty = queue.current == nil
+        let insertAt = min(queue.currentIndex + 1, queuedTracks.count)
         queue.playNext(track.filePath)
-        queuedTracks.insert(track, at: min(queue.currentIndex + 1, queuedTracks.count))
+        queuedTracks.insert(track, at: insertAt)
+        if wasEmpty { startPlayingCurrent() }
+    }
+
+    func addNext(_ tracks: [TrackInfo]) {
+        let wasEmpty = queue.current == nil
+        for track in tracks.reversed() {
+            let insertAt = min(queue.currentIndex + 1, queuedTracks.count)
+            queue.playNext(track.filePath)
+            queuedTracks.insert(track, at: insertAt)
+        }
+        if wasEmpty { startPlayingCurrent() }
     }
 
     func addLater(_ track: TrackInfo) {
+        let wasEmpty = queue.current == nil
         queue.playLater(track.filePath)
         queuedTracks.append(track)
+        if wasEmpty { startPlayingCurrent() }
+    }
+
+    func addLater(_ tracks: [TrackInfo]) {
+        let wasEmpty = queue.current == nil
+        for track in tracks {
+            queue.playLater(track.filePath)
+            queuedTracks.append(track)
+        }
+        if wasEmpty { startPlayingCurrent() }
+    }
+
+    private func startPlayingCurrent() {
+        guard let current = queue.current, queue.currentIndex < queuedTracks.count else { return }
+        updateMetadata(for: queuedTracks[queue.currentIndex])
+        loadAndPlay(filePath: current)
     }
 
     func clearQueue() {

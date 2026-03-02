@@ -11,6 +11,8 @@ public final class AudioPlayer: @unchecked Sendable {
     private var _volume: Float = 0.7
     private var sampleRate: Double = 44100
     private var scheduledStartFrame: AVAudioFramePosition = 0
+    /// Suppresses `onTrackFinished` during seek / load to prevent queue cascade.
+    private var suppressFinishCallback = false
 
     public var onTrackFinished: (@Sendable () -> Void)?
 
@@ -65,11 +67,14 @@ public final class AudioPlayer: @unchecked Sendable {
     }
 
     public func load(url: URL) async throws {
-        // Stop current playback
+        // Stop current playback; suppress the completion callback so it doesn't
+        // fire onTrackFinished and cascade through the queue.
+        suppressFinishCallback = true
         scheduler.activeNode.stop()
         if engine.isRunning {
             engine.stop()
         }
+        suppressFinishCallback = false
 
         let file: AVAudioFile
         do {
@@ -96,7 +101,8 @@ public final class AudioPlayer: @unchecked Sendable {
 
         // Schedule the file with completion callback
         activeNode.scheduleFile(file, at: nil, completionCallbackType: .dataPlayedBack) { [weak self] _ in
-            self?.onTrackFinished?()
+            guard let self, !self.suppressFinishCallback else { return }
+            self.onTrackFinished?()
         }
 
         // Start the engine
@@ -128,13 +134,16 @@ public final class AudioPlayer: @unchecked Sendable {
     }
 
     public func stop() {
+        suppressFinishCallback = true
         scheduler.activeNode.stop()
+        suppressFinishCallback = false
         scheduledStartFrame = 0
         // Re-schedule from start if we have a file
         if let file = currentFile {
             file.framePosition = 0
             scheduler.activeNode.scheduleFile(file, at: nil, completionCallbackType: .dataPlayedBack) { [weak self] _ in
-                self?.onTrackFinished?()
+                guard let self, !self.suppressFinishCallback else { return }
+                self.onTrackFinished?()
             }
         }
     }
@@ -144,7 +153,12 @@ public final class AudioPlayer: @unchecked Sendable {
 
         let activeNode = scheduler.activeNode
         let wasPlaying = activeNode.isPlaying
+
+        // Suppress the completion callback — stopping the node fires it
+        // immediately, which would cascade through the queue.
+        suppressFinishCallback = true
         activeNode.stop()
+        suppressFinishCallback = false
 
         let targetFrame = AVAudioFramePosition(time * sampleRate)
         let clampedFrame = max(0, min(targetFrame, file.length))
@@ -156,7 +170,8 @@ public final class AudioPlayer: @unchecked Sendable {
 
         scheduledStartFrame = clampedFrame
         activeNode.scheduleSegment(file, startingFrame: clampedFrame, frameCount: remainingFrames, at: nil, completionCallbackType: .dataPlayedBack) { [weak self] _ in
-            self?.onTrackFinished?()
+            guard let self, !self.suppressFinishCallback else { return }
+            self.onTrackFinished?()
         }
 
         if wasPlaying {
