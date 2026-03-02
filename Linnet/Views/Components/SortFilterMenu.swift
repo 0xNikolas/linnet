@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import LinnetLibrary
 
 // MARK: - Sort Option Protocol
 
@@ -55,15 +56,17 @@ enum TrackSortOption: String, SortOptionProtocol {
         }
     }
 
-    var sqlColumn: String {
+    var sortColumn: TrackSortColumn {
         switch self {
-        case .title: "track.title COLLATE NOCASE"
-        case .artist: "COALESCE(artist.name, 'zzz') COLLATE NOCASE"
-        case .album: "COALESCE(album.name, 'zzz') COLLATE NOCASE"
-        case .dateAdded: "track.dateAdded"
-        case .duration: "track.duration"
+        case .title: .title
+        case .artist: .artist
+        case .album: .album
+        case .dateAdded: .dateAdded
+        case .duration: .duration
         }
     }
+
+    var sqlColumn: String { sortColumn.sql }
 }
 
 // MARK: - Artist Sort Options
@@ -78,12 +81,14 @@ enum ArtistSortOption: String, SortOptionProtocol {
         }
     }
 
-    var sqlColumn: String {
+    var sortColumn: ArtistSortColumn {
         switch self {
-        case .name: "artist.name COLLATE NOCASE"
-        case .albumCount: "albumCount"
+        case .name: .name
+        case .albumCount: .albumCount
         }
     }
+
+    var sqlColumn: String { sortColumn.sql }
 }
 
 // MARK: - Album Sort Options
@@ -99,13 +104,15 @@ enum AlbumSortOption: String, SortOptionProtocol {
         }
     }
 
-    var sqlColumn: String {
+    var sortColumn: AlbumSortColumn {
         switch self {
-        case .name: "album.name COLLATE NOCASE"
-        case .artist: "COALESCE(album.artistName, 'zzz') COLLATE NOCASE"
-        case .year: "COALESCE(album.year, 0)"
+        case .name: .name
+        case .artist: .artist
+        case .year: .year
         }
     }
+
+    var sqlColumn: String { sortColumn.sql }
 }
 
 // MARK: - Playlist Sort Options
@@ -121,13 +128,15 @@ enum PlaylistSortOption: String, SortOptionProtocol {
         }
     }
 
-    var sqlColumn: String {
+    var sortColumn: PlaylistSortColumn {
         switch self {
-        case .name: "name COLLATE NOCASE"
-        case .dateCreated: "createdAt"
-        case .songCount: "songCount"
+        case .name: .name
+        case .dateCreated: .dateCreated
+        case .songCount: .songCount
         }
     }
+
+    var sqlColumn: String { sortColumn.sql }
 }
 
 // MARK: - Sort Filter Menu Button (NSMenu-based, no toolbar pill)

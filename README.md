@@ -30,13 +30,13 @@ swift test --package-path Packages/LinnetAI
 Linnet/                  Main app target (SwiftUI)
 Packages/
   LinnetAudio/           Audio engine — AVAudioEngine, gapless playback, EQ, queue
-  LinnetLibrary/         Library management — SwiftData models, metadata, folder scanning
+  LinnetLibrary/         Library management — GRDB database, metadata, folder scanning
   LinnetAI/              AI features — MLX Swift, embeddings, recommendations, playlists
 ```
 
 ## Tech Stack
 
-- Swift 6, SwiftUI, AVAudioEngine, SwiftData
+- Swift 6, SwiftUI, AVAudioEngine, GRDB
 - MLX Swift for on-device ML inference
 - XcodeGen for project generation
 - GitHub Actions CI with parallel package testing

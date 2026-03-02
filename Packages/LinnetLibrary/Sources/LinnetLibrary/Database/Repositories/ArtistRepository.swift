@@ -1,6 +1,16 @@
 import Foundation
 import GRDB
 
+public enum ArtistSortColumn: String, Sendable {
+    case name, albumCount
+    public var sql: String {
+        switch self {
+        case .name: "artist.name COLLATE NOCASE"
+        case .albumCount: "albumCount"
+        }
+    }
+}
+
 public struct ArtistRepository: Sendable {
     private let pool: DatabasePool
 
@@ -73,7 +83,7 @@ public struct ArtistRepository: Sendable {
 
     // MARK: - Joined queries
 
-    public func fetchAllInfo(orderedBy ordering: String = "artist.name COLLATE NOCASE", direction: String = "ASC") throws -> [ArtistInfo] {
+    public func fetchAllInfo(orderedBy column: ArtistSortColumn = .name, direction: SortDirection = .ascending) throws -> [ArtistInfo] {
         try pool.read { db in
             let sql = """
                 SELECT
@@ -84,7 +94,7 @@ public struct ArtistRepository: Sendable {
                 LEFT JOIN album ON album.artistId = artist.id
                 LEFT JOIN track ON track.artistId = artist.id
                 GROUP BY artist.id
-                ORDER BY \(ordering) \(direction)
+                ORDER BY \(column.sql) \(direction.sql)
                 """
             return try ArtistInfo.fetchAll(db, sql: sql)
         }

@@ -1,6 +1,17 @@
 import Foundation
 import GRDB
 
+public enum PlaylistSortColumn: String, Sendable {
+    case name, dateCreated, songCount
+    public var sql: String {
+        switch self {
+        case .name: "name COLLATE NOCASE"
+        case .dateCreated: "createdAt"
+        case .songCount: "songCount"
+        }
+    }
+}
+
 public struct PlaylistRepository: Sendable {
     private let pool: DatabasePool
 
@@ -50,7 +61,7 @@ public struct PlaylistRepository: Sendable {
         }
     }
 
-    public func fetchAllSorted(orderedBy ordering: String = "name COLLATE NOCASE", direction: String = "ASC") throws -> [(playlist: PlaylistRecord, songCount: Int)] {
+    public func fetchAllSorted(orderedBy column: PlaylistSortColumn = .name, direction: SortDirection = .ascending) throws -> [(playlist: PlaylistRecord, songCount: Int)] {
         try pool.read { db in
             let sql = """
                 SELECT
@@ -59,7 +70,7 @@ public struct PlaylistRepository: Sendable {
                 FROM playlist
                 LEFT JOIN playlistEntry ON playlistEntry.playlistId = playlist.id
                 GROUP BY playlist.id
-                ORDER BY \(ordering) \(direction)
+                ORDER BY \(column.sql) \(direction.sql)
                 """
             let rows = try Row.fetchAll(db, sql: sql)
             return rows.map { row in

@@ -1,6 +1,17 @@
 import Foundation
 import GRDB
 
+public enum AlbumSortColumn: String, Sendable {
+    case name, artist, year
+    public var sql: String {
+        switch self {
+        case .name: "album.name COLLATE NOCASE"
+        case .artist: "COALESCE(album.artistName, 'zzz') COLLATE NOCASE"
+        case .year: "COALESCE(album.year, 0)"
+        }
+    }
+}
+
 public struct AlbumRepository: Sendable {
     private let pool: DatabasePool
 
@@ -106,7 +117,7 @@ public struct AlbumRepository: Sendable {
 
     // MARK: - Joined queries
 
-    public func fetchAllInfo(orderedBy ordering: String = "album.name COLLATE NOCASE", direction: String = "ASC") throws -> [AlbumInfo] {
+    public func fetchAllInfo(orderedBy column: AlbumSortColumn = .name, direction: SortDirection = .ascending) throws -> [AlbumInfo] {
         try pool.read { db in
             let sql = """
                 SELECT
@@ -115,7 +126,7 @@ public struct AlbumRepository: Sendable {
                 FROM album
                 LEFT JOIN track ON track.albumId = album.id
                 GROUP BY album.id
-                ORDER BY \(ordering) \(direction)
+                ORDER BY \(column.sql) \(direction.sql)
                 """
             return try AlbumInfo.fetchAll(db, sql: sql)
         }

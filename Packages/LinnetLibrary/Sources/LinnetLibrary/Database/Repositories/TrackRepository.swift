@@ -1,6 +1,26 @@
 import Foundation
 import GRDB
 
+// MARK: - Sort Enums
+
+public enum SortDirection: String, Sendable, CaseIterable {
+    case ascending, descending
+    public var sql: String { self == .ascending ? "ASC" : "DESC" }
+}
+
+public enum TrackSortColumn: String, Sendable {
+    case title, artist, album, dateAdded, duration
+    public var sql: String {
+        switch self {
+        case .title: "track.title COLLATE NOCASE"
+        case .artist: "COALESCE(artist.name, 'zzz') COLLATE NOCASE"
+        case .album: "COALESCE(album.name, 'zzz') COLLATE NOCASE"
+        case .dateAdded: "track.dateAdded"
+        case .duration: "track.duration"
+        }
+    }
+}
+
 public struct TrackRepository: Sendable {
     private let pool: DatabasePool
 
@@ -101,9 +121,9 @@ public struct TrackRepository: Sendable {
 
     // MARK: - TrackInfo (joined)
 
-    public func fetchAllInfo(orderedBy ordering: String = "track.title COLLATE NOCASE", direction: String = "ASC") throws -> [TrackInfo] {
+    public func fetchAllInfo(orderedBy column: TrackSortColumn = .title, direction: SortDirection = .ascending) throws -> [TrackInfo] {
         try pool.read { db in
-            try TrackInfo.fetchAll(db, sql: "\(TrackInfo.baseSQL) ORDER BY \(ordering) \(direction)")
+            try TrackInfo.fetchAll(db, sql: "\(TrackInfo.baseSQL) ORDER BY \(column.sql) \(direction.sql)")
         }
     }
 
@@ -119,9 +139,9 @@ public struct TrackRepository: Sendable {
         }
     }
 
-    public func fetchLikedInfo(orderedBy ordering: String = "track.title COLLATE NOCASE", direction: String = "ASC") throws -> [TrackInfo] {
+    public func fetchLikedInfo(orderedBy column: TrackSortColumn = .title, direction: SortDirection = .ascending) throws -> [TrackInfo] {
         try pool.read { db in
-            try TrackInfo.fetchAll(db, sql: "\(TrackInfo.baseSQL) WHERE track.likedStatus = 1 ORDER BY \(ordering) \(direction)")
+            try TrackInfo.fetchAll(db, sql: "\(TrackInfo.baseSQL) WHERE track.likedStatus = 1 ORDER BY \(column.sql) \(direction.sql)")
         }
     }
 
