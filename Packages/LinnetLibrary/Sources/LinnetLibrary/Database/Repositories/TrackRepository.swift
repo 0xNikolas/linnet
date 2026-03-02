@@ -103,85 +103,31 @@ public struct TrackRepository: Sendable {
 
     public func fetchAllInfo(orderedBy ordering: String = "track.title COLLATE NOCASE", direction: String = "ASC") throws -> [TrackInfo] {
         try pool.read { db in
-            let sql = """
-                SELECT
-                    track.*,
-                    artist.name AS artistName,
-                    album.name AS albumName
-                FROM track
-                LEFT JOIN artist ON track.artistId = artist.id
-                LEFT JOIN album ON track.albumId = album.id
-                ORDER BY \(ordering) \(direction)
-                """
-            return try TrackInfo.fetchAll(db, sql: sql)
+            try TrackInfo.fetchAll(db, sql: "\(TrackInfo.baseSQL) ORDER BY \(ordering) \(direction)")
         }
     }
 
     public func fetchInfoByAlbum(id albumId: Int64) throws -> [TrackInfo] {
         try pool.read { db in
-            let sql = """
-                SELECT
-                    track.*,
-                    artist.name AS artistName,
-                    album.name AS albumName
-                FROM track
-                LEFT JOIN artist ON track.artistId = artist.id
-                LEFT JOIN album ON track.albumId = album.id
-                WHERE track.albumId = ?
-                ORDER BY track.discNumber, track.trackNumber
-                """
-            return try TrackInfo.fetchAll(db, sql: sql, arguments: [albumId])
+            try TrackInfo.fetchAll(db, sql: "\(TrackInfo.baseSQL) WHERE track.albumId = ? ORDER BY track.discNumber, track.trackNumber", arguments: [albumId])
         }
     }
 
     public func fetchInfoByArtist(id artistId: Int64) throws -> [TrackInfo] {
         try pool.read { db in
-            let sql = """
-                SELECT
-                    track.*,
-                    artist.name AS artistName,
-                    album.name AS albumName
-                FROM track
-                LEFT JOIN artist ON track.artistId = artist.id
-                LEFT JOIN album ON track.albumId = album.id
-                WHERE track.artistId = ?
-                ORDER BY track.title
-                """
-            return try TrackInfo.fetchAll(db, sql: sql, arguments: [artistId])
+            try TrackInfo.fetchAll(db, sql: "\(TrackInfo.baseSQL) WHERE track.artistId = ? ORDER BY track.title", arguments: [artistId])
         }
     }
 
     public func fetchLikedInfo(orderedBy ordering: String = "track.title COLLATE NOCASE", direction: String = "ASC") throws -> [TrackInfo] {
         try pool.read { db in
-            let sql = """
-                SELECT
-                    track.*,
-                    artist.name AS artistName,
-                    album.name AS albumName
-                FROM track
-                LEFT JOIN artist ON track.artistId = artist.id
-                LEFT JOIN album ON track.albumId = album.id
-                WHERE track.likedStatus = 1
-                ORDER BY \(ordering) \(direction)
-                """
-            return try TrackInfo.fetchAll(db, sql: sql)
+            try TrackInfo.fetchAll(db, sql: "\(TrackInfo.baseSQL) WHERE track.likedStatus = 1 ORDER BY \(ordering) \(direction)")
         }
     }
 
     public func fetchRecentlyAddedInfo(limit: Int = 50) throws -> [TrackInfo] {
         try pool.read { db in
-            let sql = """
-                SELECT
-                    track.*,
-                    artist.name AS artistName,
-                    album.name AS albumName
-                FROM track
-                LEFT JOIN artist ON track.artistId = artist.id
-                LEFT JOIN album ON track.albumId = album.id
-                ORDER BY track.dateAdded DESC
-                LIMIT ?
-                """
-            return try TrackInfo.fetchAll(db, sql: sql, arguments: [limit])
+            try TrackInfo.fetchAll(db, sql: "\(TrackInfo.baseSQL) ORDER BY track.dateAdded DESC LIMIT ?", arguments: [limit])
         }
     }
 
@@ -209,14 +155,7 @@ public struct TrackRepository: Sendable {
 
             if let ftsQuery = sanitizedFTSQuery(query) {
                 let sql = """
-                    SELECT DISTINCT
-                        track.*,
-                        artist.name AS artistName,
-                        album.name AS albumName
-                    FROM track
-                    LEFT JOIN artist ON track.artistId = artist.id
-                    LEFT JOIN album ON track.albumId = album.id
-                    LEFT JOIN trackFts ON trackFts.rowid = track.id
+                    \(TrackInfo.baseFTSSQL)
                     WHERE trackFts MATCH ?
                        OR track.title LIKE ?
                        OR artist.name LIKE ?
@@ -227,13 +166,7 @@ public struct TrackRepository: Sendable {
                 return try TrackInfo.fetchAll(db, sql: sql, arguments: [ftsQuery, likePattern, likePattern, likePattern, limit])
             } else {
                 let sql = """
-                    SELECT DISTINCT
-                        track.*,
-                        artist.name AS artistName,
-                        album.name AS albumName
-                    FROM track
-                    LEFT JOIN artist ON track.artistId = artist.id
-                    LEFT JOIN album ON track.albumId = album.id
+                    \(TrackInfo.baseSQL)
                     WHERE track.title LIKE ?
                        OR artist.name LIKE ?
                        OR album.name LIKE ?
@@ -247,40 +180,32 @@ public struct TrackRepository: Sendable {
 
     // MARK: - Grouped queries with optional search
 
-    public func fetchInfoGroupedByArtist(searchQuery: String? = nil) throws -> [(sectionName: String, tracks: [TrackInfo])] {
-        try pool.read { db in
-            var sql = """
-                SELECT
-                    track.*,
-                    artist.name AS artistName,
-                    album.name AS albumName
-                FROM track
-                LEFT JOIN artist ON track.artistId = artist.id
-                LEFT JOIN album ON track.albumId = album.id
+    private func searchSQL(searchQuery: String?) -> (sql: String, arguments: [any DatabaseValueConvertible]) {
+        guard let query = searchQuery, !query.isEmpty else {
+            return (sql: TrackInfo.baseSQL, arguments: [])
+        }
+        let likePattern = "%\(query)%"
+        if let ftsQuery = sanitizedFTSQuery(query) {
+            let sql = """
+                \(TrackInfo.baseFTSSQL)
+                WHERE trackFts MATCH ? OR track.title LIKE ? OR artist.name LIKE ? OR album.name LIKE ?
                 """
-            var arguments: [any DatabaseValueConvertible] = []
+            return (sql: sql, arguments: [ftsQuery, likePattern, likePattern, likePattern])
+        } else {
+            let sql = """
+                \(TrackInfo.baseSQL)
+                WHERE track.title LIKE ? OR artist.name LIKE ? OR album.name LIKE ?
+                """
+            return (sql: sql, arguments: [likePattern, likePattern, likePattern])
+        }
+    }
 
-            if let query = searchQuery, !query.isEmpty {
-                let likePattern = "%\(query)%"
-                if let ftsQuery = sanitizedFTSQuery(query) {
-                    sql += """
+    public func fetchInfoGroupedByArtist(searchQuery: String? = nil) throws -> [(sectionName: String, tracks: [TrackInfo])] {
+        try pool.read { [self] db in
+            let (sql, arguments) = searchSQL(searchQuery: searchQuery)
+            let fullSQL = sql + " ORDER BY COALESCE(artist.name, 'Unknown Artist') COLLATE NOCASE, track.title COLLATE NOCASE"
 
-                        LEFT JOIN trackFts ON trackFts.rowid = track.id
-                        WHERE trackFts MATCH ? OR track.title LIKE ? OR artist.name LIKE ? OR album.name LIKE ?
-                        """
-                    arguments = [ftsQuery, likePattern, likePattern, likePattern]
-                } else {
-                    sql += """
-
-                        WHERE track.title LIKE ? OR artist.name LIKE ? OR album.name LIKE ?
-                        """
-                    arguments = [likePattern, likePattern, likePattern]
-                }
-            }
-
-            sql += " ORDER BY COALESCE(artist.name, 'Unknown Artist') COLLATE NOCASE, track.title COLLATE NOCASE"
-
-            let tracks = try TrackInfo.fetchAll(db, sql: sql, arguments: StatementArguments(arguments))
+            let tracks = try TrackInfo.fetchAll(db, sql: fullSQL, arguments: StatementArguments(arguments))
 
             var sections: [(sectionName: String, tracks: [TrackInfo])] = []
             var currentKey = ""
@@ -307,39 +232,11 @@ public struct TrackRepository: Sendable {
     }
 
     public func fetchInfoGroupedByAlbum(searchQuery: String? = nil) throws -> [(sectionName: String, tracks: [TrackInfo])] {
-        try pool.read { db in
-            var sql = """
-                SELECT
-                    track.*,
-                    artist.name AS artistName,
-                    album.name AS albumName
-                FROM track
-                LEFT JOIN artist ON track.artistId = artist.id
-                LEFT JOIN album ON track.albumId = album.id
-                """
-            var arguments: [any DatabaseValueConvertible] = []
+        try pool.read { [self] db in
+            let (sql, arguments) = searchSQL(searchQuery: searchQuery)
+            let fullSQL = sql + " ORDER BY COALESCE(album.name, 'Unknown Album') COLLATE NOCASE, track.title COLLATE NOCASE"
 
-            if let query = searchQuery, !query.isEmpty {
-                let likePattern = "%\(query)%"
-                if let ftsQuery = sanitizedFTSQuery(query) {
-                    sql += """
-
-                        LEFT JOIN trackFts ON trackFts.rowid = track.id
-                        WHERE trackFts MATCH ? OR track.title LIKE ? OR artist.name LIKE ? OR album.name LIKE ?
-                        """
-                    arguments = [ftsQuery, likePattern, likePattern, likePattern]
-                } else {
-                    sql += """
-
-                        WHERE track.title LIKE ? OR artist.name LIKE ? OR album.name LIKE ?
-                        """
-                    arguments = [likePattern, likePattern, likePattern]
-                }
-            }
-
-            sql += " ORDER BY COALESCE(album.name, 'Unknown Album') COLLATE NOCASE, track.title COLLATE NOCASE"
-
-            let tracks = try TrackInfo.fetchAll(db, sql: sql, arguments: StatementArguments(arguments))
+            let tracks = try TrackInfo.fetchAll(db, sql: fullSQL, arguments: StatementArguments(arguments))
 
             var sections: [(sectionName: String, tracks: [TrackInfo])] = []
             var currentKey = ""
@@ -366,39 +263,11 @@ public struct TrackRepository: Sendable {
     }
 
     public func fetchInfoGroupedByFolder(searchQuery: String? = nil) throws -> [(sectionName: String, tracks: [TrackInfo])] {
-        try pool.read { db in
-            var sql = """
-                SELECT
-                    track.*,
-                    artist.name AS artistName,
-                    album.name AS albumName
-                FROM track
-                LEFT JOIN artist ON track.artistId = artist.id
-                LEFT JOIN album ON track.albumId = album.id
-                """
-            var arguments: [any DatabaseValueConvertible] = []
+        try pool.read { [self] db in
+            let (sql, arguments) = searchSQL(searchQuery: searchQuery)
+            let fullSQL = sql + " ORDER BY track.filePath COLLATE NOCASE"
 
-            if let query = searchQuery, !query.isEmpty {
-                let likePattern = "%\(query)%"
-                if let ftsQuery = sanitizedFTSQuery(query) {
-                    sql += """
-
-                        LEFT JOIN trackFts ON trackFts.rowid = track.id
-                        WHERE trackFts MATCH ? OR track.title LIKE ? OR artist.name LIKE ? OR album.name LIKE ?
-                        """
-                    arguments = [ftsQuery, likePattern, likePattern, likePattern]
-                } else {
-                    sql += """
-
-                        WHERE track.title LIKE ? OR artist.name LIKE ? OR album.name LIKE ?
-                        """
-                    arguments = [likePattern, likePattern, likePattern]
-                }
-            }
-
-            sql += " ORDER BY track.filePath COLLATE NOCASE"
-
-            let tracks = try TrackInfo.fetchAll(db, sql: sql, arguments: StatementArguments(arguments))
+            let tracks = try TrackInfo.fetchAll(db, sql: fullSQL, arguments: StatementArguments(arguments))
 
             var sections: [(sectionName: String, tracks: [TrackInfo])] = []
             var currentKey = ""

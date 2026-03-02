@@ -33,15 +33,29 @@ public struct TrackInfo: Codable, Sendable, Hashable, Identifiable, FetchableRec
 
     /// SQL request that joins track with artist and album names.
     public static func request() -> SQLRequest<TrackInfo> {
-        let sql = """
-            SELECT
-                track.*,
-                artist.name AS artistName,
-                album.name AS albumName
-            FROM track
-            LEFT JOIN artist ON track.artistId = artist.id
-            LEFT JOIN album ON track.albumId = album.id
-            """
-        return SQLRequest(sql: sql)
+        SQLRequest(sql: baseSQL)
     }
+
+    /// Base SQL for the track+artist+album join. Append WHERE/ORDER BY/LIMIT as needed.
+    public static let baseSQL = """
+        SELECT
+            track.*,
+            artist.name AS artistName,
+            album.name AS albumName
+        FROM track
+        LEFT JOIN artist ON track.artistId = artist.id
+        LEFT JOIN album ON track.albumId = album.id
+        """
+
+    /// Base SQL with FTS join for search queries.
+    public static let baseFTSSQL = """
+        SELECT DISTINCT
+            track.*,
+            artist.name AS artistName,
+            album.name AS albumName
+        FROM track
+        LEFT JOIN artist ON track.artistId = artist.id
+        LEFT JOIN album ON track.albumId = album.id
+        LEFT JOIN trackFts ON trackFts.rowid = track.id
+        """
 }
