@@ -25,6 +25,7 @@ struct ArtistDetailView: View {
     @State private var observer: DatabaseObserver<ArtistDetailData>?
     @State private var artworkImage: NSImage?
     @State private var cachedData: ArtistDetailData?
+    @AppStorage("showQueueSidePane") private var showQueueSidePane = false
 
     private var data: ArtistDetailData? { observer?.value ?? cachedData }
 
@@ -47,7 +48,7 @@ struct ArtistDetailView: View {
     private var hasLoaded: Bool { data != nil }
 
     var body: some View {
-        DetailPage {
+        ScrollView {
             ScrollViewReader { proxy in
                 VStack(alignment: .leading, spacing: 20) {
                     // Hero
@@ -215,6 +216,13 @@ struct ArtistDetailView: View {
                     withAnimation {
                         proxy.scrollTo(trackID, anchor: .center)
                     }
+                }
+            }
+        }
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button { showQueueSidePane.toggle() } label: {
+                    Image(systemName: "sidebar.trailing")
                 }
             }
         }
