@@ -92,8 +92,8 @@ public final class LibraryViewModel {
         stopWatching()
         guard let folders = try? db.watchedFolders.fetchEnabled() else { return }
         for folder in folders {
-            let url = URL(filePath: folder.path)
-            fileWatcher.watch(folder: folder.path) { [weak self] _ in
+            let url = resolveFolder(folder, db: db)
+            fileWatcher.watch(folder: url.path) { [weak self] _ in
                 Task { @MainActor [weak self] in
                     self?.scanFolder(url: url, db: db)
                 }
