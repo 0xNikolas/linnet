@@ -2,7 +2,7 @@ import AVFoundation
 
 public final class AudioPlayer: @unchecked Sendable {
     private let engine: AVAudioEngine
-    private let playerNode: AVAudioPlayerNode
+    private let scheduler: GaplessScheduler
     private let eqNode: AVAudioUnitEQ
     public let equalizer: Equalizer
 
@@ -12,19 +12,33 @@ public final class AudioPlayer: @unchecked Sendable {
     private var sampleRate: Double = 44100
     private var scheduledStartFrame: AVAudioFramePosition = 0
 
+    public var onTrackFinished: (@Sendable () -> Void)?
+
+    public var crossfadeEnabled: Bool {
+        get { scheduler.crossfadeManager.isEnabled }
+        set { scheduler.crossfadeManager.isEnabled = newValue }
+    }
+
+    public var crossfadeDuration: Double {
+        get { scheduler.crossfadeManager.duration }
+        set { scheduler.crossfadeManager.duration = newValue }
+    }
+
     public init() {
         engine = AVAudioEngine()
-        playerNode = AVAudioPlayerNode()
+        scheduler = GaplessScheduler()
         eqNode = AVAudioUnitEQ(numberOfBands: Equalizer.bandCount)
         equalizer = Equalizer()
 
-        engine.attach(playerNode)
+        for node in scheduler.allNodes() {
+            engine.attach(node)
+        }
         engine.attach(eqNode)
 
         // Initial connection with default format; reconnected per file in load()
         let mainMixer = engine.mainMixerNode
         let format = mainMixer.outputFormat(forBus: 0)
-        engine.connect(playerNode, to: eqNode, format: format)
+        engine.connect(scheduler.activeNode, to: eqNode, format: format)
         engine.connect(eqNode, to: mainMixer, format: format)
 
         mainMixer.outputVolume = _volume
@@ -36,8 +50,9 @@ public final class AudioPlayer: @unchecked Sendable {
     // MARK: - Public API
 
     public var currentTime: Double {
-        guard let nodeTime = playerNode.lastRenderTime,
-              let playerTime = playerNode.playerTime(forNodeTime: nodeTime) else {
+        let node = scheduler.activeNode
+        guard let nodeTime = node.lastRenderTime,
+              let playerTime = node.playerTime(forNodeTime: nodeTime) else {
             return 0
         }
         let frames = scheduledStartFrame + playerTime.sampleTime
@@ -51,7 +66,7 @@ public final class AudioPlayer: @unchecked Sendable {
 
     public func load(url: URL) async throws {
         // Stop current playback
-        playerNode.stop()
+        scheduler.activeNode.stop()
         if engine.isRunning {
             engine.stop()
         }
@@ -71,15 +86,18 @@ public final class AudioPlayer: @unchecked Sendable {
         _duration = Double(file.length) / sampleRate
         scheduledStartFrame = 0
 
-        // Reconnect nodes with the file's processing format
+        // Reconnect active node with the file's processing format
         let format = file.processingFormat
-        engine.disconnectNodeOutput(playerNode)
+        let activeNode = scheduler.activeNode
+        engine.disconnectNodeOutput(activeNode)
         engine.disconnectNodeOutput(eqNode)
-        engine.connect(playerNode, to: eqNode, format: format)
+        engine.connect(activeNode, to: eqNode, format: format)
         engine.connect(eqNode, to: engine.mainMixerNode, format: format)
 
-        // Schedule the file
-        playerNode.scheduleFile(file, at: nil, completionHandler: nil)
+        // Schedule the file with completion callback
+        activeNode.scheduleFile(file, at: nil, completionCallbackType: .dataPlayedBack) { [weak self] _ in
+            self?.onTrackFinished?()
+        }
 
         // Start the engine
         engine.prepare()
@@ -93,32 +111,40 @@ public final class AudioPlayer: @unchecked Sendable {
         }
     }
 
+    public func preloadNext(url: URL) throws {
+        let file = try AVAudioFile(forReading: url)
+        scheduler.scheduleNext(file: file, at: nil)
+    }
+
     public func play() {
         if !engine.isRunning {
             try? engine.start()
         }
-        playerNode.play()
+        scheduler.activeNode.play()
     }
 
     public func pause() {
-        playerNode.pause()
+        scheduler.activeNode.pause()
     }
 
     public func stop() {
-        playerNode.stop()
+        scheduler.activeNode.stop()
         scheduledStartFrame = 0
         // Re-schedule from start if we have a file
         if let file = currentFile {
             file.framePosition = 0
-            playerNode.scheduleFile(file, at: nil, completionHandler: nil)
+            scheduler.activeNode.scheduleFile(file, at: nil, completionCallbackType: .dataPlayedBack) { [weak self] _ in
+                self?.onTrackFinished?()
+            }
         }
     }
 
     public func seek(to time: Double) {
         guard let file = currentFile else { return }
 
-        let wasPlaying = playerNode.isPlaying
-        playerNode.stop()
+        let activeNode = scheduler.activeNode
+        let wasPlaying = activeNode.isPlaying
+        activeNode.stop()
 
         let targetFrame = AVAudioFramePosition(time * sampleRate)
         let clampedFrame = max(0, min(targetFrame, file.length))
@@ -129,10 +155,12 @@ public final class AudioPlayer: @unchecked Sendable {
         guard remainingFrames > 0 else { return }
 
         scheduledStartFrame = clampedFrame
-        playerNode.scheduleSegment(file, startingFrame: clampedFrame, frameCount: remainingFrames, at: nil, completionHandler: nil)
+        activeNode.scheduleSegment(file, startingFrame: clampedFrame, frameCount: remainingFrames, at: nil, completionCallbackType: .dataPlayedBack) { [weak self] _ in
+            self?.onTrackFinished?()
+        }
 
         if wasPlaying {
-            playerNode.play()
+            activeNode.play()
         }
     }
 

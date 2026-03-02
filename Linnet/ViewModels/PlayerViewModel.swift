@@ -79,6 +79,17 @@ public final class PlayerViewModel {
     init() {
         eqBands = audioPlayer.equalizer.bands
         setupRemoteCommands()
+        audioPlayer.onTrackFinished = { [weak self] in
+            Task { @MainActor in self?.next() }
+        }
+    }
+
+    func setCrossfadeEnabled(_ enabled: Bool) {
+        audioPlayer.crossfadeEnabled = enabled
+    }
+
+    func setCrossfadeDuration(_ duration: Double) {
+        audioPlayer.crossfadeDuration = duration
     }
 
     func setAppDatabase(_ db: AppDatabase) {
@@ -329,9 +340,6 @@ public final class PlayerViewModel {
             Task { @MainActor [weak self] in
                 guard let self, self.isPlaying else { return }
                 self.currentTime = self.audioPlayer.currentTime
-                if self.currentTime >= self.duration && self.duration > 0 {
-                    self.next()
-                }
             }
         }
     }

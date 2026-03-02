@@ -271,8 +271,9 @@ struct LibrarySettingsView: View {
 }
 
 struct AudioSettingsView: View {
-    @State private var crossfadeEnabled = false
-    @State private var crossfadeDuration: Double = 3
+    @AppStorage("crossfadeEnabled") private var crossfadeEnabled = false
+    @AppStorage("crossfadeDuration") private var crossfadeDuration: Double = 3
+    @Environment(PlayerViewModel.self) private var player
 
     var body: some View {
         Form {
@@ -289,6 +290,9 @@ struct AudioSettingsView: View {
             }
         }
         .padding()
+        .onChange(of: crossfadeEnabled) { _, new in player.setCrossfadeEnabled(new) }
+        .onChange(of: crossfadeDuration) { _, new in player.setCrossfadeDuration(new) }
+        .onAppear { player.setCrossfadeEnabled(crossfadeEnabled); player.setCrossfadeDuration(crossfadeDuration) }
     }
 }
 
