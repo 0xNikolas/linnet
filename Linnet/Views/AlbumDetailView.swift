@@ -3,6 +3,9 @@ import LinnetLibrary
 import GRDB
 import UniformTypeIdentifiers
 
+// File-level caches -- survive SwiftUI view lifecycle
+private nonisolated(unsafe) var _albumDetailCache: [Int64: [TrackInfo]] = [:]
+
 private func formatTime(_ seconds: Double) -> String {
     let mins = Int(seconds) / 60
     let secs = Int(seconds) % 60
@@ -166,11 +169,27 @@ struct AlbumDetailView: View {
         }
         .task {
             guard let db = appDatabase, let albumId = album.id else { return }
+            let initial = _albumDetailCache[albumId] ?? (
+                (try? db.pool.read { db in
+                    try TrackInfo.fetchAll(db, sql: """
+                        SELECT track.*, artist.name AS artistName, album.name AS albumName
+                        FROM track
+                        LEFT JOIN artist ON track.artistId = artist.id
+                        LEFT JOIN album ON track.albumId = album.id
+                        WHERE track.albumId = ?
+                        ORDER BY track.discNumber, track.trackNumber
+                        """, arguments: [albumId])
+                }) ?? []
+            )
             observer = DatabaseObserver(
-                initial: [],
+                initial: initial,
                 in: db.pool,
                 observation: makeObservation(albumId: albumId)
             )
+        }
+        .onChange(of: tracks.count) {
+            guard let albumId = album.id else { return }
+            _albumDetailCache[albumId] = tracks
         }
         .sheet(isPresented: $showEditSheet) {
             EditAlbumSheet(album: album)

@@ -5,6 +5,7 @@ import UniformTypeIdentifiers
 
 // File-level storage -- survives SwiftUI view lifecycle
 private nonisolated(unsafe) var _albumCardLastClickTime: Date = .distantPast
+private nonisolated(unsafe) var _artistDetailCache: [Int64: ArtistDetailData] = [:]
 
 private struct ArtistDetailData: Sendable {
     let allTracks: [TrackInfo]
@@ -22,6 +23,7 @@ struct ArtistDetailView: View {
     @State private var isFetchingArtwork = false
     @State private var observer: DatabaseObserver<ArtistDetailData>?
     @State private var artworkImage: NSImage?
+    @State private var hasLoaded = false
 
     private var allTracks: [TrackInfo] {
         var tracks = observer?.value.allTracks ?? []
@@ -98,9 +100,11 @@ struct ArtistDetailView: View {
                         Text(artist.name)
                             .font(.app(size: 28, weight: .bold))
 
-                        Text("\(albums.count) albums, \(allTracks.count) songs")
-                            .font(.app(size: 13))
-                            .foregroundStyle(.tertiary)
+                        if hasLoaded {
+                            Text("\(albums.count) albums, \(allTracks.count) songs")
+                                .font(.app(size: 13))
+                                .foregroundStyle(.tertiary)
+                        }
 
                         HStack(spacing: 12) {
                             Button("Play") {
@@ -124,77 +128,131 @@ struct ArtistDetailView: View {
                 }
                 .padding(20)
 
-                // Albums section
-                if !albums.isEmpty {
-                    Text("Albums")
-                        .font(.headline)
-                        .padding(.horizontal, 20)
-
-                    let columns = [GridItem(.adaptive(minimum: 160, maximum: 200), spacing: 20)]
-                    LazyVGrid(columns: columns, spacing: 20) {
-                        ForEach(albums.sorted(by: { ($0.year ?? Int.min) > ($1.year ?? Int.min) })) { albumInfo in
-                            ArtistAlbumCard(
-                                albumInfo: albumInfo,
-                                artistName: artist.name,
-                                isSelected: selectedAlbumID == albumInfo.id,
-                                onSelect: {
-                                    selectedAlbumID = albumInfo.id
-                                    selectedTrackID = nil
-                                },
-                                onNavigate: {
-                                    let record = AlbumRecord(
-                                        id: albumInfo.id,
-                                        name: albumInfo.name,
-                                        artistName: albumInfo.artistName,
-                                        year: albumInfo.year,
-                                        artistId: albumInfo.artistId
-                                    )
-                                    navigationPath.append(record)
-                                },
-                                onRemove: { removeAlbum(albumInfo) }
-                            )
-                        }
+                if !hasLoaded {
+                    VStack(spacing: 12) {
+                        ProgressView()
+                        Text("Loading...")
+                            .font(.app(size: 13))
+                            .foregroundStyle(.secondary)
                     }
-                    .padding(.horizontal, 20)
-                }
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding(.top, 40)
+                } else {
+                    // Albums section
+                    if !albums.isEmpty {
+                        Text("Albums")
+                            .font(.headline)
+                            .padding(.horizontal, 20)
 
-                // Songs section
-                if !allTracks.isEmpty {
-                    Text("Songs")
-                        .font(.headline)
-                        .padding(.horizontal, 20)
-                        .padding(.top, 4)
-
-                    VStack(spacing: 0) {
-                        ForEach(Array(allTracks.enumerated()), id: \.element.id) { index, track in
-                            ArtistTrackRow(
-                                track: track,
-                                index: index,
-                                isSelected: selectedTrackID == track.id,
-                                allTracks: allTracks,
-                                onSelect: {
-                                    selectedTrackID = track.id
-                                    selectedAlbumID = nil
-                                },
-                                onPlay: { t, q, i in player.playTrack(t, queue: q, startingAt: i) },
-                                onPlayNext: { player.addNext($0) },
-                                onPlayLater: { player.addLater($0) },
-                                onRemove: { removeTrack($0) }
-                            )
-                            .id(track.id)
+                        let columns = [GridItem(.adaptive(minimum: 160, maximum: 200), spacing: 20)]
+                        LazyVGrid(columns: columns, spacing: 20) {
+                            ForEach(albums.sorted(by: { ($0.year ?? Int.min) > ($1.year ?? Int.min) })) { albumInfo in
+                                ArtistAlbumCard(
+                                    albumInfo: albumInfo,
+                                    artistName: artist.name,
+                                    isSelected: selectedAlbumID == albumInfo.id,
+                                    onSelect: {
+                                        selectedAlbumID = albumInfo.id
+                                        selectedTrackID = nil
+                                    },
+                                    onNavigate: {
+                                        let record = AlbumRecord(
+                                            id: albumInfo.id,
+                                            name: albumInfo.name,
+                                            artistName: albumInfo.artistName,
+                                            year: albumInfo.year,
+                                            artistId: albumInfo.artistId
+                                        )
+                                        navigationPath.append(record)
+                                    },
+                                    onRemove: { removeAlbum(albumInfo) }
+                                )
+                            }
                         }
+                        .padding(.horizontal, 20)
                     }
-                    .padding(.horizontal, 20)
+
+                    // Songs section
+                    if !allTracks.isEmpty {
+                        Text("Songs")
+                            .font(.headline)
+                            .padding(.horizontal, 20)
+                            .padding(.top, 4)
+
+                        VStack(spacing: 0) {
+                            ForEach(Array(allTracks.enumerated()), id: \.element.id) { index, track in
+                                ArtistTrackRow(
+                                    track: track,
+                                    index: index,
+                                    isSelected: selectedTrackID == track.id,
+                                    allTracks: allTracks,
+                                    onSelect: {
+                                        selectedTrackID = track.id
+                                        selectedAlbumID = nil
+                                    },
+                                    onPlay: { t, q, i in player.playTrack(t, queue: q, startingAt: i) },
+                                    onPlayNext: { player.addNext($0) },
+                                    onPlayLater: { player.addLater($0) },
+                                    onRemove: { removeTrack($0) }
+                                )
+                                .id(track.id)
+                            }
+                        }
+                        .padding(.horizontal, 20)
+                    }
                 }
             }
+            .animation(.easeIn(duration: 0.2), value: hasLoaded)
         }
         .task {
             guard let db = appDatabase, let artistId = artist.id else { return }
+            // Use cached data for instant display, fall back to DB read
+            let initial: ArtistDetailData
+            if let cached = _artistDetailCache[artistId] {
+                initial = cached
+                hasLoaded = true
+            } else {
+                do {
+                    initial = try db.pool.read { db in
+                        let trackSql = """
+                            SELECT track.*, artist.name AS artistName, album.name AS albumName
+                            FROM track
+                            LEFT JOIN artist ON track.artistId = artist.id
+                            LEFT JOIN album ON track.albumId = album.id
+                            WHERE track.artistId = ?
+                            ORDER BY track.title
+                            """
+                        let tracks = try TrackInfo.fetchAll(db, sql: trackSql, arguments: [artistId])
+                        let albumSql = """
+                            SELECT album.id, album.name, album.artistName, album.year, album.artistId,
+                                COUNT(track.id) AS trackCount
+                            FROM album
+                            LEFT JOIN track ON track.albumId = album.id
+                            WHERE album.artistId = ?
+                            GROUP BY album.id
+                            ORDER BY album.year DESC, album.name
+                            """
+                        let albums = try AlbumInfo.fetchAll(db, sql: albumSql, arguments: [artistId])
+                        return ArtistDetailData(allTracks: tracks, albums: albums)
+                    }
+                } catch {
+                    initial = ArtistDetailData(allTracks: [], albums: [])
+                }
+            }
             observer = DatabaseObserver(
-                initial: ArtistDetailData(allTracks: [], albums: []),
+                initial: initial,
                 in: db.pool,
                 observation: makeObservation(artistId: artistId)
             )
+            hasLoaded = true
+        }
+        .onChange(of: observer?.value.allTracks.count) {
+            guard let artistId = artist.id, let data = observer?.value else { return }
+            _artistDetailCache[artistId] = data
+        }
+        .onChange(of: observer?.value.albums.count) {
+            guard let artistId = artist.id, let data = observer?.value else { return }
+            _artistDetailCache[artistId] = data
         }
         .onReceive(NotificationCenter.default.publisher(for: .highlightTrackInDetail)) { notification in
             guard let trackID = notification.userInfo?["trackID"] as? Int64 else { return }
