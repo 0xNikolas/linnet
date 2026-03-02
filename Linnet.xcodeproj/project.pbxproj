@@ -49,6 +49,8 @@
 		C2333A4B3DFA3E1C042023C3 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B2CA4C9B9356156D4AAA672 /* SettingsView.swift */; };
 		C2BBD1622C57EF0BA30FF2C2 /* SidebarConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = FFCB60156EDB8A2DEF898F93 /* SidebarConfiguration.swift */; };
 		CAFFE40870C06CE9A4E45A1C /* NowPlayingBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2B2913F2EE055D3AB16E9C2 /* NowPlayingBar.swift */; };
+		D1A2B3C4D5E6F7A8B9C0D1E2 /* DetailPage.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1A2B3C4D5E6F7A8B9C0D1E3 /* DetailPage.swift */; };
+		D1A2B3C4D5E6F7A8B9C0D1E4 /* ListPage.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1A2B3C4D5E6F7A8B9C0D1E5 /* ListPage.swift */; };
 		E965433A92D64FF42F56B301 /* DropOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = C6CF3FA465CDBB782A8EDB11 /* DropOverlay.swift */; };
 		ED38ADE6DBCCED0497712B10 /* HorizontalScrollRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 19873F4C7491C128EB4F182D /* HorizontalScrollRow.swift */; };
 		F9347004F21A4AA00E9CF1FC /* ArtistListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F8073F95DBD83F791B887E8E /* ArtistListView.swift */; };
@@ -90,6 +92,8 @@
 		B316E5A396E0347DE424F663 /* EditAlbumSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditAlbumSheet.swift; sourceTree = "<group>"; };
 		B769C428A5BC782D03A9EA32 /* NavigationPathKey.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NavigationPathKey.swift; sourceTree = "<group>"; };
 		C6CF3FA465CDBB782A8EDB11 /* DropOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DropOverlay.swift; sourceTree = "<group>"; };
+		D1A2B3C4D5E6F7A8B9C0D1E3 /* DetailPage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DetailPage.swift; sourceTree = "<group>"; };
+		D1A2B3C4D5E6F7A8B9C0D1E5 /* ListPage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListPage.swift; sourceTree = "<group>"; };
 		D5956203773072C14700960D /* ArtistDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArtistDetailView.swift; sourceTree = "<group>"; };
 		D8F8CEB0E1F833051B91E558 /* Log.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Log.swift; sourceTree = "<group>"; };
 		DBC583B5B9F1D851C2DFD2C8 /* PlayerViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerViewModel.swift; sourceTree = "<group>"; };
@@ -168,10 +172,12 @@
 			children = (
 				A276A50E3EB2A9940B91B92C /* AddToPlaylistMenu.swift */,
 				A835241FE8A88E770ED3F19B /* AlbumCard.swift */,
+				D1A2B3C4D5E6F7A8B9C0D1E3 /* DetailPage.swift */,
 				C6CF3FA465CDBB782A8EDB11 /* DropOverlay.swift */,
 				B316E5A396E0347DE424F663 /* EditAlbumSheet.swift */,
 				19873F4C7491C128EB4F182D /* HorizontalScrollRow.swift */,
 				03AF2BFD84E509A5A8330778 /* LikeDislikeMenu.swift */,
+				D1A2B3C4D5E6F7A8B9C0D1E5 /* ListPage.swift */,
 				1A2B3C4D5E6F7A8B9C0D1E2F /* SortFilterMenu.swift */,
 				26448EB1C39D24B01D9C39FB /* TrackRow.swift */,
 				052EF560DB4B01852384FE8C /* VibrancyStyles.swift */,
@@ -322,6 +328,7 @@
 				5FAF4B70EC36178490D2F2B7 /* BreadcrumbBar.swift in Sources */,
 				968E9CDAAC6E7BD5B5B43F31 /* ContentArea.swift in Sources */,
 				83C20C4B929A3EA0ACF80530 /* ContentView.swift in Sources */,
+				D1A2B3C4D5E6F7A8B9C0D1E2 /* DetailPage.swift in Sources */,
 				1409B8433663203E85A2D6DE /* DoubleClickModifier.swift in Sources */,
 				E965433A92D64FF42F56B301 /* DropOverlay.swift in Sources */,
 				686FAD2EBD51447F3AF93E80 /* EditAlbumSheet.swift in Sources */,
@@ -331,6 +338,7 @@
 				ED38ADE6DBCCED0497712B10 /* HorizontalScrollRow.swift in Sources */,
 				4107CAB3239766BAC079F614 /* LibraryViewModel.swift in Sources */,
 				2B3B4B75DBE3EF08029238D6 /* LikeDislikeMenu.swift in Sources */,
+				D1A2B3C4D5E6F7A8B9C0D1E4 /* ListPage.swift in Sources */,
 				46BE8350CACF00BA37067CF2 /* LikedSongsView.swift in Sources */,
 				05D9C4016E079AB4134EEB99 /* LinnetApp.swift in Sources */,
 				AE58961DED8BE542D3FFC1D6 /* ListenNowView.swift in Sources */,

@@ -47,166 +47,176 @@ struct ArtistDetailView: View {
     private var hasLoaded: Bool { data != nil }
 
     var body: some View {
-        ScrollViewReader { proxy in
-        ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                // Hero
-                HStack(spacing: 16) {
-                    Circle()
-                        .fill(.quaternary)
-                        .frame(width: 120, height: 120)
-                        .overlay {
-                            if let img = artworkImage {
-                                Image(nsImage: img)
-                                    .resizable()
-                                    .scaledToFill()
-                            } else if isFetchingArtwork {
-                                ProgressView()
-                            } else {
-                                Image(systemName: "music.mic")
-                                    .font(.app(size: 40))
-                                    .foregroundStyle(.secondary)
+        DetailPage {
+            ScrollViewReader { proxy in
+                VStack(alignment: .leading, spacing: 20) {
+                    // Hero
+                    HStack(spacing: 16) {
+                        Circle()
+                            .fill(.quaternary)
+                            .frame(width: 120, height: 120)
+                            .overlay {
+                                if let img = artworkImage {
+                                    Image(nsImage: img)
+                                        .resizable()
+                                        .scaledToFill()
+                                } else if isFetchingArtwork {
+                                    ProgressView()
+                                } else {
+                                    Image(systemName: "music.mic")
+                                        .font(.app(size: 40))
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                            .clipShape(Circle())
+                            .task {
+                                loadArtwork()
+                                guard artworkImage == nil, let db = appDatabase, let artistId = artist.id else { return }
+                                isFetchingArtwork = true
+                                let _ = await artworkService.fetchArtistArtwork(
+                                    artistId: artistId,
+                                    artistName: artist.name,
+                                    db: db
+                                )
+                                loadArtwork()
+                                isFetchingArtwork = false
+                            }
+                            .contextMenu {
+                                Button {
+                                    Task {
+                                        guard let db = appDatabase, let artistId = artist.id else { return }
+                                        artworkImage = nil
+                                        isFetchingArtwork = true
+                                        let _ = await artworkService.fetchArtistArtwork(
+                                            artistId: artistId,
+                                            artistName: artist.name,
+                                            db: db,
+                                            force: true
+                                        )
+                                        loadArtwork()
+                                        isFetchingArtwork = false
+                                    }
+                                } label: { Label("Find Artwork", systemImage: "photo") }
+                                Button { chooseArtistArtwork() } label: { Label("Choose Artwork...", systemImage: "folder") }
+                            }
+
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text(artist.name)
+                                .font(.app(size: 28, weight: .bold))
+
+                            if hasLoaded {
+                                Text("\(albums.count) albums, \(allTracks.count) songs")
+                                    .font(.app(size: 13))
+                                    .foregroundStyle(.tertiary)
+                            }
+
+                            HStack(spacing: 12) {
+                                Button("Play") {
+                                    if let first = allTracks.first {
+                                        player.playTrack(first, queue: allTracks, startingAt: 0)
+                                    }
+                                }
+                                .buttonStyle(.borderedProminent)
+                                .disabled(allTracks.isEmpty)
+
+                                Button("Shuffle") {
+                                    let shuffled = allTracks.shuffled()
+                                    if let first = shuffled.first {
+                                        player.playTrack(first, queue: shuffled, startingAt: 0)
+                                    }
+                                }
+                                .buttonStyle(.bordered)
+                                .disabled(allTracks.isEmpty)
                             }
                         }
-                        .clipShape(Circle())
-                        .task {
-                            loadArtwork()
-                            guard artworkImage == nil, let db = appDatabase, let artistId = artist.id else { return }
-                            isFetchingArtwork = true
-                            let _ = await artworkService.fetchArtistArtwork(
-                                artistId: artistId,
-                                artistName: artist.name,
-                                db: db
-                            )
-                            loadArtwork()
-                            isFetchingArtwork = false
-                        }
-                        .contextMenu {
-                            Button {
-                                Task {
-                                    guard let db = appDatabase, let artistId = artist.id else { return }
-                                    artworkImage = nil
-                                    isFetchingArtwork = true
-                                    let _ = await artworkService.fetchArtistArtwork(
-                                        artistId: artistId,
-                                        artistName: artist.name,
-                                        db: db,
-                                        force: true
-                                    )
-                                    loadArtwork()
-                                    isFetchingArtwork = false
-                                }
-                            } label: { Label("Find Artwork", systemImage: "photo") }
-                            Button { chooseArtistArtwork() } label: { Label("Choose Artwork...", systemImage: "folder") }
-                        }
+                    }
+                    .padding(20)
 
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text(artist.name)
-                            .font(.app(size: 28, weight: .bold))
-
-                        if hasLoaded {
-                            Text("\(albums.count) albums, \(allTracks.count) songs")
+                    if !hasLoaded {
+                        VStack(spacing: 12) {
+                            ProgressView()
+                            Text("Loading...")
                                 .font(.app(size: 13))
-                                .foregroundStyle(.tertiary)
+                                .foregroundStyle(.secondary)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .center)
+                        .padding(.top, 40)
+                    } else {
+                        // Albums section
+                        if !albums.isEmpty {
+                            Text("Albums")
+                                .font(.headline)
+                                .padding(.horizontal, 20)
+
+                            let columns = [GridItem(.adaptive(minimum: 160, maximum: 200), spacing: 20)]
+                            LazyVGrid(columns: columns, spacing: 20) {
+                                ForEach(albums.sorted(by: { ($0.year ?? Int.min) > ($1.year ?? Int.min) })) { albumInfo in
+                                    ArtistAlbumCard(
+                                        albumInfo: albumInfo,
+                                        artistName: artist.name,
+                                        isSelected: selectedAlbumID == albumInfo.id,
+                                        onSelect: {
+                                            selectedAlbumID = albumInfo.id
+                                            selectedTrackID = nil
+                                        },
+                                        onNavigate: {
+                                            let record = AlbumRecord(
+                                                id: albumInfo.id,
+                                                name: albumInfo.name,
+                                                artistName: albumInfo.artistName,
+                                                year: albumInfo.year,
+                                                artistId: albumInfo.artistId
+                                            )
+                                            navigationPath.append(record)
+                                        },
+                                        onRemove: { removeAlbum(albumInfo) }
+                                    )
+                                }
+                            }
+                            .padding(.horizontal, 20)
                         }
 
-                        HStack(spacing: 12) {
-                            Button("Play") {
-                                if let first = allTracks.first {
-                                    player.playTrack(first, queue: allTracks, startingAt: 0)
-                                }
-                            }
-                            .buttonStyle(.borderedProminent)
-                            .disabled(allTracks.isEmpty)
+                        // Songs section
+                        if !allTracks.isEmpty {
+                            Text("Songs")
+                                .font(.headline)
+                                .padding(.horizontal, 20)
+                                .padding(.top, 4)
 
-                            Button("Shuffle") {
-                                let shuffled = allTracks.shuffled()
-                                if let first = shuffled.first {
-                                    player.playTrack(first, queue: shuffled, startingAt: 0)
+                            VStack(spacing: 0) {
+                                ForEach(Array(allTracks.enumerated()), id: \.element.id) { index, track in
+                                    ArtistTrackRow(
+                                        track: track,
+                                        index: index,
+                                        isSelected: selectedTrackID == track.id,
+                                        allTracks: allTracks,
+                                        onSelect: {
+                                            selectedTrackID = track.id
+                                            selectedAlbumID = nil
+                                        },
+                                        onPlay: { t, q, i in player.playTrack(t, queue: q, startingAt: i) },
+                                        onPlayNext: { player.addNext($0) },
+                                        onPlayLater: { player.addLater($0) },
+                                        onRemove: { removeTrack($0) }
+                                    )
+                                    .id(track.id)
                                 }
                             }
-                            .buttonStyle(.bordered)
-                            .disabled(allTracks.isEmpty)
+                            .padding(.horizontal, 20)
                         }
                     }
                 }
-                .padding(20)
-
-                if !hasLoaded {
-                    VStack(spacing: 12) {
-                        ProgressView()
-                        Text("Loading...")
-                            .font(.app(size: 13))
-                            .foregroundStyle(.secondary)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .center)
-                    .padding(.top, 40)
-                } else {
-                    // Albums section
-                    if !albums.isEmpty {
-                        Text("Albums")
-                            .font(.headline)
-                            .padding(.horizontal, 20)
-
-                        let columns = [GridItem(.adaptive(minimum: 160, maximum: 200), spacing: 20)]
-                        LazyVGrid(columns: columns, spacing: 20) {
-                            ForEach(albums.sorted(by: { ($0.year ?? Int.min) > ($1.year ?? Int.min) })) { albumInfo in
-                                ArtistAlbumCard(
-                                    albumInfo: albumInfo,
-                                    artistName: artist.name,
-                                    isSelected: selectedAlbumID == albumInfo.id,
-                                    onSelect: {
-                                        selectedAlbumID = albumInfo.id
-                                        selectedTrackID = nil
-                                    },
-                                    onNavigate: {
-                                        let record = AlbumRecord(
-                                            id: albumInfo.id,
-                                            name: albumInfo.name,
-                                            artistName: albumInfo.artistName,
-                                            year: albumInfo.year,
-                                            artistId: albumInfo.artistId
-                                        )
-                                        navigationPath.append(record)
-                                    },
-                                    onRemove: { removeAlbum(albumInfo) }
-                                )
-                            }
-                        }
-                        .padding(.horizontal, 20)
-                    }
-
-                    // Songs section
-                    if !allTracks.isEmpty {
-                        Text("Songs")
-                            .font(.headline)
-                            .padding(.horizontal, 20)
-                            .padding(.top, 4)
-
-                        VStack(spacing: 0) {
-                            ForEach(Array(allTracks.enumerated()), id: \.element.id) { index, track in
-                                ArtistTrackRow(
-                                    track: track,
-                                    index: index,
-                                    isSelected: selectedTrackID == track.id,
-                                    allTracks: allTracks,
-                                    onSelect: {
-                                        selectedTrackID = track.id
-                                        selectedAlbumID = nil
-                                    },
-                                    onPlay: { t, q, i in player.playTrack(t, queue: q, startingAt: i) },
-                                    onPlayNext: { player.addNext($0) },
-                                    onPlayLater: { player.addLater($0) },
-                                    onRemove: { removeTrack($0) }
-                                )
-                                .id(track.id)
-                            }
-                        }
-                        .padding(.horizontal, 20)
+                .animation(.easeIn(duration: 0.2), value: hasLoaded)
+                .onReceive(NotificationCenter.default.publisher(for: .highlightTrackInDetail)) { notification in
+                    guard let trackID = notification.userInfo?["trackID"] as? Int64 else { return }
+                    guard allTracks.contains(where: { $0.id == trackID }) else { return }
+                    selectedTrackID = trackID
+                    selectedAlbumID = nil
+                    withAnimation {
+                        proxy.scrollTo(trackID, anchor: .center)
                     }
                 }
             }
-            .animation(.easeIn(duration: 0.2), value: hasLoaded)
         }
         .onAppear {
             guard let artistId = artist.id else { return }
@@ -257,16 +267,6 @@ struct ArtistDetailView: View {
             guard let artistId = artist.id, let data = observer?.value else { return }
             _artistDetailCache[artistId] = data
         }
-        .onReceive(NotificationCenter.default.publisher(for: .highlightTrackInDetail)) { notification in
-            guard let trackID = notification.userInfo?["trackID"] as? Int64 else { return }
-            guard allTracks.contains(where: { $0.id == trackID }) else { return }
-            selectedTrackID = trackID
-            selectedAlbumID = nil
-            withAnimation {
-                proxy.scrollTo(trackID, anchor: .center)
-            }
-        }
-        } // ScrollViewReader
     }
 
     private func makeObservation(artistId: Int64) -> ValueObservation<ValueReducers.Fetch<ArtistDetailData>> {
