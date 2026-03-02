@@ -344,6 +344,11 @@ struct ArtworkSettingsView: View {
 struct AISettingsView: View {
     var body: some View {
         Form {
+            Section {
+                Label("AI features are experimental and require Apple Silicon with sufficient RAM.", systemImage: "exclamationmark.triangle")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
             Section("AI Models") {
                 Text("No models downloaded")
                     .foregroundStyle(.secondary)

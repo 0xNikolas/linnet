@@ -11,6 +11,13 @@ struct AIChatView: View {
                     .foregroundStyle(.tint)
                 Text("AI Assistant")
                     .font(.title2.bold())
+                Text("Experimental")
+                    .font(.caption)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(.orange.opacity(0.15))
+                    .foregroundStyle(.orange)
+                    .clipShape(RoundedRectangle(cornerRadius: 4))
                 Spacer()
 
                 if !viewModel.isAIAvailable {
