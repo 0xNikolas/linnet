@@ -18,7 +18,6 @@ struct PlaylistsView: View {
     @AppStorage("playlistSortOption") private var sortOption: PlaylistSortOption = .dateCreated
     @AppStorage("playlistSortDirection") private var sortDirection: SortDirection = .ascending
     @State private var searchText = ""
-    @State private var isSearchPresented = false
 
     private var playlists: [PlaylistRecord] {
         (observer?.value ?? []).map(\.playlist)
@@ -35,62 +34,63 @@ struct PlaylistsView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack {
-                Text("Playlists")
-                    .font(.largeTitle.bold())
-                Spacer()
-                SortFilterMenuButton(sortOption: $sortOption, sortDirection: $sortDirection)
-
-                Button(action: createPlaylist) {
-                    Label("New Playlist", systemImage: "plus")
+        ListPage(
+            searchPrompt: "Search playlists...",
+            sortOption: $sortOption,
+            sortDirection: $sortDirection,
+            searchText: $searchText
+        ) {
+            VStack(alignment: .leading, spacing: 0) {
+                HStack {
+                    Text("Playlists")
+                        .font(.largeTitle.bold())
+                    Spacer()
+                    Button(action: createPlaylist) {
+                        Label("New Playlist", systemImage: "plus")
+                    }
+                    .buttonStyle(.bordered)
                 }
-                .buttonStyle(.bordered)
-            }
-            .padding(20)
+                .padding(20)
 
-            if playlists.isEmpty {
-                ContentUnavailableView(
-                    searchText.isEmpty ? "No Playlists" : "No Results",
-                    systemImage: searchText.isEmpty ? "music.note.list" : "magnifyingglass",
-                    description: Text(searchText.isEmpty
-                        ? "Create a playlist to get started."
-                        : "No playlists matching \"\(searchText)\"")
-                )
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else {
-                List(playlists, id: \.id, selection: $selectedPlaylistID) { playlist in
-                    HStack(spacing: 12) {
-                        RoundedRectangle(cornerRadius: 4)
-                            .fill(.quaternary)
-                            .frame(width: 40, height: 40)
-                            .overlay {
-                                Image(systemName: playlist.isAIGenerated ? "sparkles" : "music.note.list")
+                if playlists.isEmpty {
+                    ContentUnavailableView(
+                        searchText.isEmpty ? "No Playlists" : "No Results",
+                        systemImage: searchText.isEmpty ? "music.note.list" : "magnifyingglass",
+                        description: Text(searchText.isEmpty
+                            ? "Create a playlist to get started."
+                            : "No playlists matching \"\(searchText)\"")
+                    )
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    List(playlists, id: \.id, selection: $selectedPlaylistID) { playlist in
+                        HStack(spacing: 12) {
+                            RoundedRectangle(cornerRadius: 4)
+                                .fill(.quaternary)
+                                .frame(width: 40, height: 40)
+                                .overlay {
+                                    Image(systemName: playlist.isAIGenerated ? "sparkles" : "music.note.list")
+                                        .foregroundStyle(.secondary)
+                                }
+
+                            VStack(alignment: .leading) {
+                                Text(playlist.name)
+                                    .font(.app(size: 14))
+                                Text("\(entryCounts[playlist.id!] ?? 0) songs")
+                                    .font(.app(size: 12))
                                     .foregroundStyle(.secondary)
                             }
-
-                        VStack(alignment: .leading) {
-                            Text(playlist.name)
-                                .font(.app(size: 14))
-                            Text("\(entryCounts[playlist.id!] ?? 0) songs")
-                                .font(.app(size: 12))
-                                .foregroundStyle(.secondary)
+                        }
+                        .padding(.vertical, 4)
+                        .contextMenu {
+                            Button(role: .destructive) { deletePlaylist(playlist) } label: { Label("Delete Playlist", systemImage: "trash") }
                         }
                     }
-                    .padding(.vertical, 4)
-                    .contextMenu {
-                        Button(role: .destructive) { deletePlaylist(playlist) } label: { Label("Delete Playlist", systemImage: "trash") }
-                    }
+                    .contextMenu(forSelectionType: Int64.self, menu: { _ in }, primaryAction: { identifiers in
+                        guard let id = identifiers.first else { return }
+                        navigationPath.wrappedValue.append(id)
+                    })
                 }
-                .contextMenu(forSelectionType: Int64.self, menu: { _ in }, primaryAction: { identifiers in
-                    guard let id = identifiers.first else { return }
-                    navigationPath.wrappedValue.append(id)
-                })
             }
-        }
-        .searchable(text: $searchText, isPresented: $isSearchPresented, prompt: "Search playlists...")
-        .onReceive(NotificationCenter.default.publisher(for: .focusSearch)) { _ in
-            isSearchPresented = true
         }
         .task {
             guard let db = appDatabase else { return }

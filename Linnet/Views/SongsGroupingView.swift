@@ -58,46 +58,41 @@ struct SongsGroupingView: View {
     @AppStorage("songsSortOption") private var sortOption: TrackSortOption = .title
     @AppStorage("songsSortDirection") private var sortDirection: SortDirection = .ascending
     @State private var searchText = ""
-    @State private var isSearchPresented = false
 
     private var tracks: [TrackInfo] { observer?.value.tracks ?? [] }
     private var sections: [TrackSection] { observer?.value.sections ?? [] }
 
     var body: some View {
-        SongsListView(
-            tracks: tracks,
-            sections: grouping == .allSongs ? [] : sections,
-            highlightedTrackID: $highlightedTrackID
-        )
-        .searchable(text: $searchText, isPresented: $isSearchPresented, prompt: "Search songs...")
-        .toolbar {
-            ToolbarItem(placement: .automatic) {
-                SortFilterMenuButton(
-                    sortOption: $sortOption,
-                    sortDirection: $sortDirection
-                ) { menu, coordinator in
-                    menu.addItem(.separator())
-                    let header = NSMenuItem(title: "Group By", action: nil, keyEquivalent: "")
-                    header.isEnabled = false
-                    menu.addItem(header)
-                    for option in SongsGrouping.allCases {
-                        let item = NSMenuItem(
-                            title: option.rawValue,
-                            action: #selector(type(of: coordinator).selectExtra(_:)),
-                            keyEquivalent: ""
-                        )
-                        item.target = coordinator
-                        item.state = grouping == option ? .on : .off
-                        item.representedObject = { [self] in
-                            grouping = option
-                        } as () -> Void
-                        menu.addItem(item)
-                    }
+        ListPage(
+            searchPrompt: "Search songs...",
+            sortOption: $sortOption,
+            sortDirection: $sortDirection,
+            searchText: $searchText,
+            extraMenuBuilder: { menu, coordinator in
+                menu.addItem(.separator())
+                let header = NSMenuItem(title: "Group By", action: nil, keyEquivalent: "")
+                header.isEnabled = false
+                menu.addItem(header)
+                for option in SongsGrouping.allCases {
+                    let item = NSMenuItem(
+                        title: option.rawValue,
+                        action: #selector(type(of: coordinator).selectExtra(_:)),
+                        keyEquivalent: ""
+                    )
+                    item.target = coordinator
+                    item.state = grouping == option ? .on : .off
+                    item.representedObject = { [self] in
+                        grouping = option
+                    } as () -> Void
+                    menu.addItem(item)
                 }
             }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .focusSearch)) { _ in
-            isSearchPresented = true
+        ) {
+            SongsListView(
+                tracks: tracks,
+                sections: grouping == .allSongs ? [] : sections,
+                highlightedTrackID: $highlightedTrackID
+            )
         }
         .task {
             guard let db = appDatabase else { return }

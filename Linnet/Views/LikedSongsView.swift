@@ -11,16 +11,19 @@ struct LikedSongsView: View {
     @AppStorage("likedSortOption") private var sortOption: TrackSortOption = .title
     @AppStorage("likedSortDirection") private var sortDirection: SortDirection = .ascending
     @State private var observer: DatabaseObserver<[TrackInfo]>?
+    @State private var searchText = ""
 
     var body: some View {
-        SongsListView(tracks: observer?.value ?? [], highlightedTrackID: $highlightedTrackID)
-            .navigationTitle("Liked Songs")
-            .toolbar {
-                ToolbarItem(placement: .automatic) {
-                    SortFilterMenuButton(sortOption: $sortOption, sortDirection: $sortDirection)
-                }
-            }
-            .task {
+        ListPage(
+            searchPrompt: "Search liked songs...",
+            sortOption: $sortOption,
+            sortDirection: $sortDirection,
+            searchText: $searchText
+        ) {
+            SongsListView(tracks: observer?.value ?? [], highlightedTrackID: $highlightedTrackID)
+                .navigationTitle("Liked Songs")
+        }
+        .task {
                 guard let db = appDatabase else { return }
                 let initial = _likedSongsCache ?? (
                     (try? db.pool.read { db in

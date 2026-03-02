@@ -140,9 +140,6 @@ struct ContentView: View {
         .onReceive(NotificationCenter.default.publisher(for: .openSettings)) { _ in
             NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
         }
-        .onReceive(NotificationCenter.default.publisher(for: .toggleQueueSidePane)) { _ in
-            showQueueSidePane.toggle()
-        }
         .frame(minWidth: 900, minHeight: 600)
         .dropDestination(for: URL.self) { urls, _ in
             let audioExtensions: Set<String> = ["mp3", "m4a", "aac", "flac", "alac", "wav", "aiff", "aif", "ogg", "wma", "caf", "opus"]

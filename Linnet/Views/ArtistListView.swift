@@ -14,42 +14,39 @@ struct ArtistListView: View {
     @AppStorage("artistSortOption") private var sortOption: ArtistSortOption = .name
     @AppStorage("artistSortDirection") private var sortDirection: SortDirection = .ascending
     @State private var searchText = ""
-    @State private var isSearchPresented = false
 
     private var artists: [ArtistInfo] { observer?.value ?? [] }
 
     var body: some View {
-        List(selection: $selectedArtistID) {
-            if artists.isEmpty {
-                ContentUnavailableView(
-                    searchText.isEmpty ? "No Artists" : "No Results",
-                    systemImage: searchText.isEmpty ? "music.mic" : "magnifyingglass",
-                    description: Text(searchText.isEmpty
-                        ? "Add a music folder in Settings to get started."
-                        : "No artists matching \"\(searchText)\"")
-                )
-                .frame(maxWidth: .infinity, minHeight: 300)
-            } else {
-                ForEach(artists) { artist in
-                    ArtistRow(artist: artist, onRemove: { removeArtist(artist) })
-                        .tag(artist.id)
+        ListPage(
+            searchPrompt: "Search artists...",
+            sortOption: $sortOption,
+            sortDirection: $sortDirection,
+            searchText: $searchText
+        ) {
+            List(selection: $selectedArtistID) {
+                if artists.isEmpty {
+                    ContentUnavailableView(
+                        searchText.isEmpty ? "No Artists" : "No Results",
+                        systemImage: searchText.isEmpty ? "music.mic" : "magnifyingglass",
+                        description: Text(searchText.isEmpty
+                            ? "Add a music folder in Settings to get started."
+                            : "No artists matching \"\(searchText)\"")
+                    )
+                    .frame(maxWidth: .infinity, minHeight: 300)
+                } else {
+                    ForEach(artists) { artist in
+                        ArtistRow(artist: artist, onRemove: { removeArtist(artist) })
+                            .tag(artist.id)
+                    }
                 }
             }
-        }
-        .contextMenu(forSelectionType: Int64.self, menu: { _ in }, primaryAction: { identifiers in
-            guard let id = identifiers.first,
-                  let artist = artists.first(where: { $0.id == id }) else { return }
-            let artistRecord = ArtistRecord(id: artist.id, name: artist.name)
-            navigationPath.wrappedValue.append(artistRecord)
-        })
-        .searchable(text: $searchText, isPresented: $isSearchPresented, prompt: "Search artists...")
-        .toolbar {
-            ToolbarItem(placement: .automatic) {
-                SortFilterMenuButton(sortOption: $sortOption, sortDirection: $sortDirection)
-            }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .focusSearch)) { _ in
-            isSearchPresented = true
+            .contextMenu(forSelectionType: Int64.self, menu: { _ in }, primaryAction: { identifiers in
+                guard let id = identifiers.first,
+                      let artist = artists.first(where: { $0.id == id }) else { return }
+                let artistRecord = ArtistRecord(id: artist.id, name: artist.name)
+                navigationPath.wrappedValue.append(artistRecord)
+            })
         }
         .task {
             guard let db = appDatabase else { return }

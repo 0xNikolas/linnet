@@ -15,49 +15,46 @@ struct AlbumGridView: View {
     @AppStorage("albumSortOption") private var sortOption: AlbumSortOption = .name
     @AppStorage("albumSortDirection") private var sortDirection: SortDirection = .ascending
     @State private var searchText = ""
-    @State private var isSearchPresented = false
     private let columns = [GridItem(.adaptive(minimum: 160, maximum: 200), spacing: 20)]
 
     private var albums: [AlbumInfo] { observer?.value ?? [] }
 
     var body: some View {
-        ScrollView {
-            if albums.isEmpty {
-                ContentUnavailableView(
-                    searchText.isEmpty ? "No Albums" : "No Results",
-                    systemImage: searchText.isEmpty ? "square.stack" : "magnifyingglass",
-                    description: Text(searchText.isEmpty
-                        ? "Add a music folder in Settings to get started."
-                        : "No albums matching \"\(searchText)\"")
-                )
-                .frame(maxWidth: .infinity, minHeight: 300)
-            } else {
-                LazyVGrid(columns: columns, spacing: 20) {
-                    ForEach(albums) { album in
-                        AlbumGridItem(
-                            album: album,
-                            isSelected: selectedAlbumID == album.id,
-                            onSelect: { selectedAlbumID = album.id },
-                            onNavigate: {
-                                let record = AlbumRecord(id: album.id, name: album.name, artistName: album.artistName, year: album.year, artistId: album.artistId)
-                                navigationPath.wrappedValue.append(record)
-                            },
-                            onRemove: { removeAlbum(album) }
-                        )
+        ListPage(
+            searchPrompt: "Search albums...",
+            sortOption: $sortOption,
+            sortDirection: $sortDirection,
+            searchText: $searchText
+        ) {
+            ScrollView {
+                if albums.isEmpty {
+                    ContentUnavailableView(
+                        searchText.isEmpty ? "No Albums" : "No Results",
+                        systemImage: searchText.isEmpty ? "square.stack" : "magnifyingglass",
+                        description: Text(searchText.isEmpty
+                            ? "Add a music folder in Settings to get started."
+                            : "No albums matching \"\(searchText)\"")
+                    )
+                    .frame(maxWidth: .infinity, minHeight: 300)
+                } else {
+                    LazyVGrid(columns: columns, spacing: 20) {
+                        ForEach(albums) { album in
+                            AlbumGridItem(
+                                album: album,
+                                isSelected: selectedAlbumID == album.id,
+                                onSelect: { selectedAlbumID = album.id },
+                                onNavigate: {
+                                    let record = AlbumRecord(id: album.id, name: album.name, artistName: album.artistName, year: album.year, artistId: album.artistId)
+                                    navigationPath.wrappedValue.append(record)
+                                },
+                                onRemove: { removeAlbum(album) }
+                            )
+                        }
                     }
+                    .padding(20)
+                    .animation(.default, value: albums.count)
                 }
-                .padding(20)
-                .animation(.default, value: albums.count)
             }
-        }
-        .searchable(text: $searchText, isPresented: $isSearchPresented, prompt: "Search albums...")
-        .toolbar {
-            ToolbarItem(placement: .automatic) {
-                SortFilterMenuButton(sortOption: $sortOption, sortDirection: $sortDirection)
-            }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .focusSearch)) { _ in
-            isSearchPresented = true
         }
         .task {
             guard let db = appDatabase else { return }
