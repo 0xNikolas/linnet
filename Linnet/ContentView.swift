@@ -10,6 +10,13 @@ struct ContentView: View {
     @State private var highlightedTrackID: Int64?
     @AppStorage("showQueueSidePane") private var showQueueSidePane = false
     @State private var breadcrumbs: [BreadcrumbItem] = []
+    @State private var pendingNavigation: PendingNavigation?
+
+    private enum PendingNavigation {
+        case artist(ArtistRecord)
+        case album(AlbumRecord)
+        case playlist(Int64)
+    }
 
     var body: some View {
         NavigationSplitView {
@@ -63,6 +70,17 @@ struct ContentView: View {
         .onChange(of: selectedSidebarItem) { _, newItem in
             navigationPath = NavigationPath()
             breadcrumbs = [BreadcrumbItem(title: newItem?.label ?? "Home", level: 0)]
+            if let pending = pendingNavigation {
+                pendingNavigation = nil
+                Task { @MainActor in
+                    await Task.yield()
+                    switch pending {
+                    case .artist(let artist): navigationPath.append(artist)
+                    case .album(let album): navigationPath.append(album)
+                    case .playlist(let id): navigationPath.append(id)
+                    }
+                }
+            }
         }
         .onChange(of: navigationPath.count) { oldCount, newCount in
             if newCount < oldCount {
@@ -100,39 +118,24 @@ struct ContentView: View {
                 return
             }
             selectedSidebarItem = .artists
-            navigationPath = NavigationPath()
-            Task { @MainActor in
-                try? await Task.sleep(for: .milliseconds(100))
-                navigationPath.append(ArtistRecord(id: artistId, name: artistName))
-            }
+            pendingNavigation = .artist(ArtistRecord(id: artistId, name: artistName))
         }
         .onReceive(NotificationCenter.default.publisher(for: .navigateToArtist)) { notification in
             guard let artistId = notification.userInfo?["artistId"] as? Int64,
                   let artistName = notification.userInfo?["artistName"] as? String else { return }
             selectedSidebarItem = .artists
-            navigationPath = NavigationPath()
-            Task { @MainActor in
-                try? await Task.sleep(for: .milliseconds(100))
-                navigationPath.append(ArtistRecord(id: artistId, name: artistName))
-            }
+            pendingNavigation = .artist(ArtistRecord(id: artistId, name: artistName))
         }
         .onReceive(NotificationCenter.default.publisher(for: .navigateToAlbum)) { notification in
             guard let albumId = notification.userInfo?["albumId"] as? Int64 else { return }
             guard let album = try? appDatabase?.albums.fetchOne(id: albumId) else { return }
             selectedSidebarItem = .albums
-            navigationPath = NavigationPath()
-            Task { @MainActor in
-                try? await Task.sleep(for: .milliseconds(100))
-                navigationPath.append(album)
-            }
+            pendingNavigation = .album(album)
         }
         .onReceive(NotificationCenter.default.publisher(for: .navigateToPlaylist)) { notification in
             guard let playlistID = notification.userInfo?["playlistID"] as? Int64 else { return }
-            navigationPath = NavigationPath()
-            Task { @MainActor in
-                try? await Task.sleep(for: .milliseconds(100))
-                navigationPath.append(playlistID)
-            }
+            selectedSidebarItem = .playlists
+            pendingNavigation = .playlist(playlistID)
         }
         .onReceive(NotificationCenter.default.publisher(for: .openSettings)) { _ in
             NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
