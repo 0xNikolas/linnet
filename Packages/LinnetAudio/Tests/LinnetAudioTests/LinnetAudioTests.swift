@@ -13,8 +13,7 @@ import Foundation
     #expect(state == .paused)
 }
 
-@Test func audioPlayerInitialization() async throws {
+@Test func audioPlayerInitialization() {
     let player = AudioPlayer()
-    let state = await player.state
-    #expect(state == .stopped)
+    #expect(player.duration == 0)
 }

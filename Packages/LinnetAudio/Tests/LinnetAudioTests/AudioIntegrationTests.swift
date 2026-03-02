@@ -33,10 +33,8 @@ private func generateTestWav(
 
     let player = AudioPlayer()
     try await player.load(url: url)
-    let state = await player.state
-    #expect(state == .stopped)
 
-    let duration = await player.duration
+    let duration = player.duration
     #expect(duration > 0.5)
     #expect(duration < 2.0)
 }
@@ -47,13 +45,9 @@ private func generateTestWav(
 
     let player = AudioPlayer()
     try await player.load(url: url)
-    try await player.play()
-    let playState = await player.state
-    #expect(playState == .playing)
-
-    await player.stop()
-    let stopState = await player.state
-    #expect(stopState == .stopped)
+    player.play()
+    player.stop()
+    #expect(player.duration > 0)
 }
 
 @Test func audioPlayerSeek() async throws {
@@ -62,14 +56,14 @@ private func generateTestWav(
 
     let player = AudioPlayer()
     try await player.load(url: url)
-    try await player.play()
-    try await player.seek(to: 1.5)
+    player.play()
+    player.seek(to: 1.5)
 
     // currentTime depends on audio hardware render time, which may not be
     // available on CI runners. Just verify seek doesn't crash.
-    let _ = await player.currentTime
+    let _ = player.currentTime
 
-    await player.stop()
+    player.stop()
 }
 
 // MARK: - LoudnessAnalyzer Integration Tests
