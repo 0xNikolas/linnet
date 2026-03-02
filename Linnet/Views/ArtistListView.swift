@@ -1,16 +1,20 @@
 import SwiftUI
 import LinnetLibrary
+import GRDB
 import UniformTypeIdentifiers
 
 struct ArtistListView: View {
     @Environment(\.appDatabase) private var appDatabase
     @Environment(\.navigationPath) private var navigationPath
-    @State private var artists: [ArtistInfo] = []
+    @State private var observer: DatabaseObserver<[ArtistInfo]>?
     @State private var selectedArtistID: Int64?
     @AppStorage("artistSortOption") private var sortOption: ArtistSortOption = .name
     @AppStorage("artistSortDirection") private var sortDirection: SortDirection = .ascending
     @State private var searchText = ""
     @State private var isSearchPresented = false
+
+    private var artists: [ArtistInfo] { observer?.value ?? [] }
+
     var body: some View {
         List(selection: $selectedArtistID) {
             if artists.isEmpty {
@@ -44,19 +48,59 @@ struct ArtistListView: View {
         .onReceive(NotificationCenter.default.publisher(for: .focusSearch)) { _ in
             isSearchPresented = true
         }
-        .task { loadArtists() }
-        .onChange(of: searchText) { _, _ in loadArtists() }
-        .onChange(of: sortOption) { _, _ in loadArtists() }
-        .onChange(of: sortDirection) { _, _ in loadArtists() }
+        .task {
+            guard let db = appDatabase else { return }
+            observer = DatabaseObserver(
+                initial: [],
+                in: db.pool,
+                observation: makeObservation()
+            )
+        }
+        .onChange(of: searchText) { _, _ in reobserve() }
+        .onChange(of: sortOption) { _, _ in reobserve() }
+        .onChange(of: sortDirection) { _, _ in reobserve() }
     }
 
-    private func loadArtists() {
-        guard let db = appDatabase else { return }
-        if searchText.isEmpty {
-            artists = (try? db.artists.fetchAllInfo(orderedBy: sortOption.sqlColumn, direction: sortDirection.sql)) ?? []
-        } else {
-            artists = (try? db.artists.searchInfo(query: searchText)) ?? []
+    private func makeObservation() -> ValueObservation<ValueReducers.Fetch<[ArtistInfo]>> {
+        let ordering = sortOption.sqlColumn
+        let dir = sortDirection.sql
+        let search = searchText
+        return ValueObservation.tracking { db in
+            if search.isEmpty {
+                let sql = """
+                    SELECT
+                        artist.id, artist.name,
+                        COUNT(DISTINCT album.id) AS albumCount,
+                        COUNT(DISTINCT track.id) AS trackCount
+                    FROM artist
+                    LEFT JOIN album ON album.artistId = artist.id
+                    LEFT JOIN track ON track.artistId = artist.id
+                    GROUP BY artist.id
+                    ORDER BY \(ordering) \(dir)
+                    """
+                return try ArtistInfo.fetchAll(db, sql: sql)
+            } else {
+                let pattern = "%\(search)%"
+                let sql = """
+                    SELECT
+                        artist.id, artist.name,
+                        COUNT(DISTINCT album.id) AS albumCount,
+                        COUNT(DISTINCT track.id) AS trackCount
+                    FROM artist
+                    LEFT JOIN album ON album.artistId = artist.id
+                    LEFT JOIN track ON track.artistId = artist.id
+                    WHERE artist.name LIKE ?
+                    GROUP BY artist.id
+                    ORDER BY artist.name
+                    """
+                return try ArtistInfo.fetchAll(db, sql: sql, arguments: [pattern])
+            }
         }
+    }
+
+    private func reobserve() {
+        guard let db = appDatabase else { return }
+        observer?.reobserve(in: db.pool, observation: makeObservation())
     }
 
     private func removeArtist(_ artist: ArtistInfo) {
@@ -68,7 +112,6 @@ struct ArtistListView: View {
         try? db.albums.deleteOrphaned()
         try? db.artists.delete(id: artist.id)
         try? db.artwork.delete(ownerType: "artist", ownerId: artist.id)
-        loadArtists()
     }
 }
 

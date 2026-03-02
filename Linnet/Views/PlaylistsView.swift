@@ -1,16 +1,35 @@
 import SwiftUI
 import LinnetLibrary
+import GRDB
+
+private struct PlaylistWithCount: Sendable {
+    let playlist: PlaylistRecord
+    let songCount: Int
+}
 
 struct PlaylistsView: View {
     @Environment(\.appDatabase) private var appDatabase
     @Environment(\.navigationPath) private var navigationPath
-    @State private var playlists: [PlaylistRecord] = []
-    @State private var entryCounts: [Int64: Int] = [:]
+    @State private var observer: DatabaseObserver<[PlaylistWithCount]>?
     @State private var selectedPlaylistID: Int64?
     @AppStorage("playlistSortOption") private var sortOption: PlaylistSortOption = .dateCreated
     @AppStorage("playlistSortDirection") private var sortDirection: SortDirection = .ascending
     @State private var searchText = ""
     @State private var isSearchPresented = false
+
+    private var playlists: [PlaylistRecord] {
+        (observer?.value ?? []).map(\.playlist)
+    }
+
+    private var entryCounts: [Int64: Int] {
+        var counts: [Int64: Int] = [:]
+        for item in observer?.value ?? [] {
+            if let id = item.playlist.id {
+                counts[id] = item.songCount
+            }
+        }
+        return counts
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -70,45 +89,84 @@ struct PlaylistsView: View {
         .onReceive(NotificationCenter.default.publisher(for: .focusSearch)) { _ in
             isSearchPresented = true
         }
-        .task { loadPlaylists() }
-        .onChange(of: searchText) { _, _ in loadPlaylists() }
-        .onChange(of: sortOption) { _, _ in loadPlaylists() }
-        .onChange(of: sortDirection) { _, _ in loadPlaylists() }
+        .task {
+            guard let db = appDatabase else { return }
+            observer = DatabaseObserver(
+                initial: [],
+                in: db.pool,
+                observation: makeObservation()
+            )
+        }
+        .onChange(of: searchText) { _, _ in reobserve() }
+        .onChange(of: sortOption) { _, _ in reobserve() }
+        .onChange(of: sortDirection) { _, _ in reobserve() }
     }
 
-    private func loadPlaylists() {
-        guard let db = appDatabase else { return }
-        if searchText.isEmpty {
-            let results = (try? db.playlists.fetchAllSorted(orderedBy: sortOption.sqlColumn, direction: sortDirection.sql)) ?? []
-            playlists = results.map(\.playlist)
-            var counts: [Int64: Int] = [:]
-            for result in results {
-                if let id = result.playlist.id {
-                    counts[id] = result.songCount
+    private func makeObservation() -> ValueObservation<ValueReducers.Fetch<[PlaylistWithCount]>> {
+        let ordering = sortOption.sqlColumn
+        let dir = sortDirection.sql
+        let search = searchText
+        return ValueObservation.tracking { db in
+            if search.isEmpty {
+                let sql = """
+                    SELECT
+                        playlist.*,
+                        COUNT(playlistEntry.id) AS songCount
+                    FROM playlist
+                    LEFT JOIN playlistEntry ON playlistEntry.playlistId = playlist.id
+                    GROUP BY playlist.id
+                    ORDER BY \(ordering) \(dir)
+                    """
+                let rows = try Row.fetchAll(db, sql: sql)
+                return rows.map { row in
+                    let record = PlaylistRecord(
+                        id: row["id"],
+                        name: row["name"],
+                        isAIGenerated: row["isAIGenerated"],
+                        createdAt: row["createdAt"]
+                    )
+                    let count: Int = row["songCount"]
+                    return PlaylistWithCount(playlist: record, songCount: count)
+                }
+            } else {
+                let pattern = "%\(search)%"
+                let sql = """
+                    SELECT
+                        playlist.*,
+                        COUNT(playlistEntry.id) AS songCount
+                    FROM playlist
+                    LEFT JOIN playlistEntry ON playlistEntry.playlistId = playlist.id
+                    WHERE playlist.name LIKE ?
+                    GROUP BY playlist.id
+                    ORDER BY playlist.createdAt
+                    """
+                let rows = try Row.fetchAll(db, sql: sql, arguments: [pattern])
+                return rows.map { row in
+                    let record = PlaylistRecord(
+                        id: row["id"],
+                        name: row["name"],
+                        isAIGenerated: row["isAIGenerated"],
+                        createdAt: row["createdAt"]
+                    )
+                    let count: Int = row["songCount"]
+                    return PlaylistWithCount(playlist: record, songCount: count)
                 }
             }
-            entryCounts = counts
-        } else {
-            playlists = (try? db.playlists.search(query: searchText)) ?? []
-            var counts: [Int64: Int] = [:]
-            for playlist in playlists {
-                if let id = playlist.id {
-                    counts[id] = (try? db.playlists.entryCount(playlistId: id)) ?? 0
-                }
-            }
-            entryCounts = counts
         }
+    }
+
+    private func reobserve() {
+        guard let db = appDatabase else { return }
+        observer?.reobserve(in: db.pool, observation: makeObservation())
     }
 
     private func createPlaylist() {
         var playlist = PlaylistRecord(name: "New Playlist")
         _ = try? appDatabase?.playlists.insert(&playlist)
-        loadPlaylists()
     }
 
     private func deletePlaylist(_ playlist: PlaylistRecord) {
         guard let id = playlist.id else { return }
         try? appDatabase?.playlists.delete(id: id)
-        loadPlaylists()
     }
 }

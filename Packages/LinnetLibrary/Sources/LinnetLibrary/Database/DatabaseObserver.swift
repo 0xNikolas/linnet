@@ -30,6 +30,26 @@ public final class DatabaseObserver<Value: Sendable> {
         )
     }
 
+    /// Replace the current observation with a new one (e.g. when sort/filter changes).
+    public func reobserve(
+        in pool: DatabasePool,
+        observation: ValueObservation<ValueReducers.Fetch<Value>>
+    ) {
+        cancellable?.cancel()
+        self.cancellable = observation.start(
+            in: pool,
+            scheduling: .immediate,
+            onError: { error in
+                print("DatabaseObserver error: \(error)")
+            },
+            onChange: { [weak self] newValue in
+                Task { @MainActor in
+                    self?.value = newValue
+                }
+            }
+        )
+    }
+
     deinit {
         cancellable?.cancel()
     }

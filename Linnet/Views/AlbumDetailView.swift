@@ -1,5 +1,6 @@
 import SwiftUI
 import LinnetLibrary
+import GRDB
 import UniformTypeIdentifiers
 
 private func formatTime(_ seconds: Double) -> String {
@@ -16,7 +17,9 @@ struct AlbumDetailView: View {
     @State private var isFetchingArtwork = false
     @State private var showEditSheet = false
     @State private var artworkImage: NSImage?
-    @State private var tracks: [TrackInfo] = []
+    @State private var observer: DatabaseObserver<[TrackInfo]>?
+
+    private var tracks: [TrackInfo] { observer?.value ?? [] }
 
     private var sortedTracks: [TrackInfo] {
         tracks.sorted {
@@ -162,16 +165,33 @@ struct AlbumDetailView: View {
             )
         }
         .task {
-            loadTracks()
+            guard let db = appDatabase, let albumId = album.id else { return }
+            observer = DatabaseObserver(
+                initial: [],
+                in: db.pool,
+                observation: makeObservation(albumId: albumId)
+            )
         }
         .sheet(isPresented: $showEditSheet) {
             EditAlbumSheet(album: album)
         }
     }
 
-    private func loadTracks() {
-        guard let albumId = album.id else { return }
-        tracks = (try? appDatabase?.tracks.fetchInfoByAlbum(id: albumId)) ?? []
+    private func makeObservation(albumId: Int64) -> ValueObservation<ValueReducers.Fetch<[TrackInfo]>> {
+        ValueObservation.tracking { db in
+            let sql = """
+                SELECT
+                    track.*,
+                    artist.name AS artistName,
+                    album.name AS albumName
+                FROM track
+                LEFT JOIN artist ON track.artistId = artist.id
+                LEFT JOIN album ON track.albumId = album.id
+                WHERE track.albumId = ?
+                ORDER BY track.discNumber, track.trackNumber
+                """
+            return try TrackInfo.fetchAll(db, sql: sql, arguments: [albumId])
+        }
     }
 
     private func loadArtwork() {
@@ -205,7 +225,6 @@ struct AlbumDetailView: View {
         }
         try? db.albums.deleteOrphaned()
         try? db.artists.deleteOrphaned()
-        loadTracks()
     }
 }
 

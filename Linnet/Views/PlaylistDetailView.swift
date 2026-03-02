@@ -1,5 +1,6 @@
 import SwiftUI
 import LinnetLibrary
+import GRDB
 
 private func formatTime(_ seconds: Double) -> String {
     let mins = Int(seconds) / 60
@@ -7,13 +8,20 @@ private func formatTime(_ seconds: Double) -> String {
     return String(format: "%d:%02d", mins, secs)
 }
 
+private struct PlaylistDetailData: Sendable {
+    let playlist: PlaylistRecord?
+    let tracks: [TrackInfo]
+}
+
 struct PlaylistDetailView: View {
     let playlistID: Int64
     @Environment(PlayerViewModel.self) private var player
     @Environment(\.appDatabase) private var appDatabase
-    @State private var playlist: PlaylistRecord?
-    @State private var tracks: [TrackInfo] = []
+    @State private var observer: DatabaseObserver<PlaylistDetailData>?
     @State private var selectedTrackIDs: Set<Int64> = []
+
+    private var playlist: PlaylistRecord? { observer?.value.playlist }
+    private var tracks: [TrackInfo] { observer?.value.tracks ?? [] }
 
     var body: some View {
         Group {
@@ -27,8 +35,13 @@ struct PlaylistDetailView: View {
             }
         }
         .task(id: playlistID) {
-            loadPlaylist()
-            if let name = playlist?.name {
+            guard let db = appDatabase else { return }
+            observer = DatabaseObserver(
+                initial: PlaylistDetailData(playlist: nil, tracks: []),
+                in: db.pool,
+                observation: makeObservation()
+            )
+            if let name = observer?.value.playlist?.name {
                 NotificationCenter.default.post(
                     name: .registerBreadcrumb,
                     object: nil,
@@ -176,18 +189,29 @@ struct PlaylistDetailView: View {
         tracks.filter { ids.contains($0.id) }
     }
 
-    private func loadPlaylist() {
-        playlist = try? appDatabase?.playlists.fetchOne(id: playlistID)
-        reloadTracks()
-    }
-
-    private func reloadTracks() {
-        tracks = (try? appDatabase?.playlists.fetchTrackInfos(playlistId: playlistID)) ?? []
+    private func makeObservation() -> ValueObservation<ValueReducers.Fetch<PlaylistDetailData>> {
+        let pid = playlistID
+        return ValueObservation.tracking { db in
+            let playlist = try PlaylistRecord.fetchOne(db, id: pid)
+            let sql = """
+                SELECT
+                    track.*,
+                    artist.name AS artistName,
+                    album.name AS albumName
+                FROM playlistEntry
+                JOIN track ON playlistEntry.trackId = track.id
+                LEFT JOIN artist ON track.artistId = artist.id
+                LEFT JOIN album ON track.albumId = album.id
+                WHERE playlistEntry.playlistId = ?
+                ORDER BY playlistEntry."order"
+                """
+            let tracks = try TrackInfo.fetchAll(db, sql: sql, arguments: [pid])
+            return PlaylistDetailData(playlist: playlist, tracks: tracks)
+        }
     }
 
     private func removeSelectedTracks(_ ids: Set<Int64>) {
         try? appDatabase?.playlists.removeEntries(trackIds: ids, fromPlaylist: playlistID)
         selectedTrackIDs = []
-        reloadTracks()
     }
 }

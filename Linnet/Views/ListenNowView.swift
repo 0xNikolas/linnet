@@ -1,17 +1,25 @@
 import SwiftUI
 import LinnetLibrary
+import GRDB
+
+private struct ListenNowData: Sendable {
+    let albums: [AlbumInfo]
+    let recentTracks: [TrackInfo]
+}
 
 struct ListenNowView: View {
     @Environment(\.appDatabase) private var appDatabase
     @Environment(PlayerViewModel.self) private var player
     @Environment(ArtworkService.self) private var artworkService
     @Environment(\.navigationPath) private var navigationPath
-    @State private var albums: [AlbumInfo] = []
-    @State private var recentTracks: [TrackInfo] = []
+    @State private var observer: DatabaseObserver<ListenNowData>?
     @State private var searchText = ""
     @State private var isSearchPresented = false
     @State private var selectedTrackID: Int64?
     @State private var selectedAlbumID: Int64?
+
+    private var albums: [AlbumInfo] { observer?.value.albums ?? [] }
+    private var recentTracks: [TrackInfo] { observer?.value.recentTracks ?? [] }
 
     var body: some View {
         ScrollView {
@@ -100,19 +108,81 @@ struct ListenNowView: View {
         .onReceive(NotificationCenter.default.publisher(for: .focusSearch)) { _ in
             isSearchPresented = true
         }
-        .task { loadData() }
-        .onChange(of: searchText) { _, _ in loadData() }
+        .task {
+            guard let db = appDatabase else { return }
+            observer = DatabaseObserver(
+                initial: ListenNowData(albums: [], recentTracks: []),
+                in: db.pool,
+                observation: makeObservation()
+            )
+        }
+        .onChange(of: searchText) { _, _ in reobserve() }
     }
 
-    private func loadData() {
-        guard let db = appDatabase else { return }
-        if searchText.isEmpty {
-            albums = (try? db.albums.fetchAllInfo()) ?? []
-            recentTracks = (try? db.tracks.fetchRecentlyAddedInfo(limit: 20)) ?? []
-        } else {
-            albums = (try? db.albums.searchInfo(query: searchText)) ?? []
-            recentTracks = (try? db.tracks.searchAllInfo(query: searchText, limit: 20)) ?? []
+    private func makeObservation() -> ValueObservation<ValueReducers.Fetch<ListenNowData>> {
+        let search = searchText
+        return ValueObservation.tracking { db in
+            let albums: [AlbumInfo]
+            let recentTracks: [TrackInfo]
+            if search.isEmpty {
+                let albumSql = """
+                    SELECT
+                        album.id, album.name, album.artistName, album.year, album.artistId,
+                        COUNT(track.id) AS trackCount
+                    FROM album
+                    LEFT JOIN track ON track.albumId = album.id
+                    GROUP BY album.id
+                    ORDER BY album.name COLLATE NOCASE ASC
+                    """
+                albums = try AlbumInfo.fetchAll(db, sql: albumSql)
+                let trackSql = """
+                    SELECT
+                        track.*,
+                        artist.name AS artistName,
+                        album.name AS albumName
+                    FROM track
+                    LEFT JOIN artist ON track.artistId = artist.id
+                    LEFT JOIN album ON track.albumId = album.id
+                    ORDER BY track.dateAdded DESC
+                    LIMIT ?
+                    """
+                recentTracks = try TrackInfo.fetchAll(db, sql: trackSql, arguments: [20])
+            } else {
+                let pattern = "%\(search)%"
+                let albumSql = """
+                    SELECT
+                        album.id, album.name, album.artistName, album.year, album.artistId,
+                        COUNT(track.id) AS trackCount
+                    FROM album
+                    LEFT JOIN track ON track.albumId = album.id
+                    WHERE album.name LIKE ? OR album.artistName LIKE ?
+                    GROUP BY album.id
+                    ORDER BY album.name
+                    """
+                albums = try AlbumInfo.fetchAll(db, sql: albumSql, arguments: [pattern, pattern])
+                let trackSql = """
+                    SELECT DISTINCT
+                        track.*,
+                        artist.name AS artistName,
+                        album.name AS albumName
+                    FROM track
+                    LEFT JOIN artist ON track.artistId = artist.id
+                    LEFT JOIN album ON track.albumId = album.id
+                    WHERE track.title LIKE ?
+                       OR artist.name LIKE ?
+                       OR album.name LIKE ?
+                    ORDER BY track.title COLLATE NOCASE
+                    LIMIT ?
+                    """
+                recentTracks = try TrackInfo.fetchAll(db, sql: trackSql, arguments: [pattern, pattern, pattern, 20])
+            }
+            return ListenNowData(albums: albums, recentTracks: recentTracks)
         }
+    }
+
+    private func reobserve() {
+        guard let db = appDatabase else { return }
+        observer?.reobserve(in: db.pool, observation: makeObservation())
     }
 
     private func removeTrack(_ track: TrackInfo) {
@@ -120,7 +190,6 @@ struct ListenNowView: View {
         try? db.tracks.delete(id: track.id)
         try? db.albums.deleteOrphaned()
         try? db.artists.deleteOrphaned()
-        loadData()
     }
 
     private func removeAlbum(_ album: AlbumInfo) {
@@ -132,7 +201,6 @@ struct ListenNowView: View {
         try? db.albums.delete(id: album.id)
         try? db.artwork.delete(ownerType: "album", ownerId: album.id)
         try? db.artists.deleteOrphaned()
-        loadData()
     }
 }
 

@@ -1,9 +1,15 @@
 import SwiftUI
 import LinnetLibrary
+import GRDB
 import UniformTypeIdentifiers
 
 // File-level storage -- survives SwiftUI view lifecycle
 private nonisolated(unsafe) var _albumCardLastClickTime: Date = .distantPast
+
+private struct ArtistDetailData: Sendable {
+    let allTracks: [TrackInfo]
+    let albums: [AlbumInfo]
+}
 
 struct ArtistDetailView: View {
     let artist: ArtistRecord
@@ -14,9 +20,25 @@ struct ArtistDetailView: View {
     @State private var selectedAlbumID: Int64?
     @State private var selectedTrackID: Int64?
     @State private var isFetchingArtwork = false
-    @State private var allTracks: [TrackInfo] = []
-    @State private var albums: [AlbumInfo] = []
+    @State private var observer: DatabaseObserver<ArtistDetailData>?
     @State private var artworkImage: NSImage?
+
+    private var allTracks: [TrackInfo] {
+        var tracks = observer?.value.allTracks ?? []
+        tracks.sort { lhs, rhs in
+            let lhsYear = lhs.year ?? 0
+            let rhsYear = rhs.year ?? 0
+            if lhsYear != rhsYear { return lhsYear > rhsYear }
+            let lhsAlbum = lhs.albumName ?? ""
+            let rhsAlbum = rhs.albumName ?? ""
+            if lhsAlbum != rhsAlbum { return lhsAlbum < rhsAlbum }
+            if lhs.discNumber != rhs.discNumber { return lhs.discNumber < rhs.discNumber }
+            return lhs.trackNumber < rhs.trackNumber
+        }
+        return tracks
+    }
+
+    private var albums: [AlbumInfo] { observer?.value.albums ?? [] }
 
     var body: some View {
         ScrollViewReader { proxy in
@@ -166,7 +188,14 @@ struct ArtistDetailView: View {
                 }
             }
         }
-        .task { loadData() }
+        .task {
+            guard let db = appDatabase, let artistId = artist.id else { return }
+            observer = DatabaseObserver(
+                initial: ArtistDetailData(allTracks: [], albums: []),
+                in: db.pool,
+                observation: makeObservation(artistId: artistId)
+            )
+        }
         .onReceive(NotificationCenter.default.publisher(for: .highlightTrackInDetail)) { notification in
             guard let trackID = notification.userInfo?["trackID"] as? Int64 else { return }
             guard allTracks.contains(where: { $0.id == trackID }) else { return }
@@ -179,20 +208,35 @@ struct ArtistDetailView: View {
         } // ScrollViewReader
     }
 
-    private func loadData() {
-        guard let artistId = artist.id else { return }
-        allTracks = (try? appDatabase?.tracks.fetchInfoByArtist(id: artistId)) ?? []
-        allTracks.sort { lhs, rhs in
-            let lhsYear = lhs.year ?? 0
-            let rhsYear = rhs.year ?? 0
-            if lhsYear != rhsYear { return lhsYear > rhsYear }
-            let lhsAlbum = lhs.albumName ?? ""
-            let rhsAlbum = rhs.albumName ?? ""
-            if lhsAlbum != rhsAlbum { return lhsAlbum < rhsAlbum }
-            if lhs.discNumber != rhs.discNumber { return lhs.discNumber < rhs.discNumber }
-            return lhs.trackNumber < rhs.trackNumber
+    private func makeObservation(artistId: Int64) -> ValueObservation<ValueReducers.Fetch<ArtistDetailData>> {
+        ValueObservation.tracking { db in
+            let trackSql = """
+                SELECT
+                    track.*,
+                    artist.name AS artistName,
+                    album.name AS albumName
+                FROM track
+                LEFT JOIN artist ON track.artistId = artist.id
+                LEFT JOIN album ON track.albumId = album.id
+                WHERE track.artistId = ?
+                ORDER BY track.title
+                """
+            let tracks = try TrackInfo.fetchAll(db, sql: trackSql, arguments: [artistId])
+
+            let albumSql = """
+                SELECT
+                    album.id, album.name, album.artistName, album.year, album.artistId,
+                    COUNT(track.id) AS trackCount
+                FROM album
+                LEFT JOIN track ON track.albumId = album.id
+                WHERE album.artistId = ?
+                GROUP BY album.id
+                ORDER BY album.year DESC, album.name
+                """
+            let albums = try AlbumInfo.fetchAll(db, sql: albumSql, arguments: [artistId])
+
+            return ArtistDetailData(allTracks: tracks, albums: albums)
         }
-        albums = (try? appDatabase?.albums.fetchInfoByArtist(id: artistId)) ?? []
     }
 
     private func loadArtwork() {
@@ -210,7 +254,6 @@ struct ArtistDetailView: View {
         try? db.tracks.delete(id: track.id)
         try? db.albums.deleteOrphaned()
         try? db.artists.deleteOrphaned()
-        loadData()
     }
 
     private func removeAlbum(_ albumInfo: AlbumInfo) {
@@ -221,7 +264,6 @@ struct ArtistDetailView: View {
         }
         try? db.albums.delete(id: albumInfo.id)
         try? db.artists.deleteOrphaned()
-        loadData()
     }
 
     private func chooseArtistArtwork() {

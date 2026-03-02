@@ -1,12 +1,15 @@
 import SwiftUI
 import LinnetLibrary
+import GRDB
 
 struct FolderBrowserView: View {
     @Environment(\.appDatabase) private var appDatabase
-    @State private var watchedFolders: [WatchedFolderRecord] = []
+    @State private var observer: DatabaseObserver<[WatchedFolderRecord]>?
     @State private var libraryVM = LibraryViewModel()
     @State private var searchText = ""
     @State private var isSearchPresented = false
+
+    private var watchedFolders: [WatchedFolderRecord] { observer?.value ?? [] }
 
     private var filteredFolders: [WatchedFolderRecord] {
         if searchText.isEmpty { return watchedFolders }
@@ -28,7 +31,6 @@ struct FolderBrowserView: View {
                     if panel.runModal() == .OK, let url = panel.url {
                         if let db = appDatabase {
                             libraryVM.addFolder(url: url, db: db)
-                            loadFolders()
                         }
                     }
                 }
@@ -73,11 +75,20 @@ struct FolderBrowserView: View {
         .onReceive(NotificationCenter.default.publisher(for: .focusSearch)) { _ in
             isSearchPresented = true
         }
-        .task { loadFolders() }
+        .task {
+            guard let db = appDatabase else { return }
+            observer = DatabaseObserver(
+                initial: [],
+                in: db.pool,
+                observation: makeObservation()
+            )
+        }
     }
 
-    private func loadFolders() {
-        watchedFolders = (try? appDatabase?.watchedFolders.fetchAll()) ?? []
+    private func makeObservation() -> ValueObservation<ValueReducers.Fetch<[WatchedFolderRecord]>> {
+        ValueObservation.tracking { db in
+            try WatchedFolderRecord.order(Column("path")).fetchAll(db)
+        }
     }
 
     private func removeFolder(_ folder: WatchedFolderRecord) {
@@ -86,6 +97,5 @@ struct FolderBrowserView: View {
         try? db.watchedFolders.deleteByPath(folder.path)
         try? db.albums.deleteOrphaned()
         try? db.artists.deleteOrphaned()
-        loadFolders()
     }
 }

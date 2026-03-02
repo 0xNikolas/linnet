@@ -1,18 +1,21 @@
 import SwiftUI
 import LinnetLibrary
+import GRDB
 import UniformTypeIdentifiers
 
 struct AlbumGridView: View {
     @Environment(\.appDatabase) private var appDatabase
     @Environment(ArtworkService.self) private var artworkService
     @Environment(\.navigationPath) private var navigationPath
-    @State private var albums: [AlbumInfo] = []
+    @State private var observer: DatabaseObserver<[AlbumInfo]>?
     @State private var selectedAlbumID: Int64?
     @AppStorage("albumSortOption") private var sortOption: AlbumSortOption = .name
     @AppStorage("albumSortDirection") private var sortDirection: SortDirection = .ascending
     @State private var searchText = ""
     @State private var isSearchPresented = false
     private let columns = [GridItem(.adaptive(minimum: 160, maximum: 200), spacing: 20)]
+
+    private var albums: [AlbumInfo] { observer?.value ?? [] }
 
     var body: some View {
         ScrollView {
@@ -53,19 +56,55 @@ struct AlbumGridView: View {
         .onReceive(NotificationCenter.default.publisher(for: .focusSearch)) { _ in
             isSearchPresented = true
         }
-        .task { loadAlbums() }
-        .onChange(of: searchText) { _, _ in loadAlbums() }
-        .onChange(of: sortOption) { _, _ in loadAlbums() }
-        .onChange(of: sortDirection) { _, _ in loadAlbums() }
+        .task {
+            guard let db = appDatabase else { return }
+            observer = DatabaseObserver(
+                initial: [],
+                in: db.pool,
+                observation: makeObservation()
+            )
+        }
+        .onChange(of: searchText) { _, _ in reobserve() }
+        .onChange(of: sortOption) { _, _ in reobserve() }
+        .onChange(of: sortDirection) { _, _ in reobserve() }
     }
 
-    private func loadAlbums() {
-        guard let db = appDatabase else { return }
-        if searchText.isEmpty {
-            albums = (try? db.albums.fetchAllInfo(orderedBy: sortOption.sqlColumn, direction: sortDirection.sql)) ?? []
-        } else {
-            albums = (try? db.albums.searchInfo(query: searchText)) ?? []
+    private func makeObservation() -> ValueObservation<ValueReducers.Fetch<[AlbumInfo]>> {
+        let ordering = sortOption.sqlColumn
+        let dir = sortDirection.sql
+        let search = searchText
+        return ValueObservation.tracking { db in
+            if search.isEmpty {
+                let sql = """
+                    SELECT
+                        album.id, album.name, album.artistName, album.year, album.artistId,
+                        COUNT(track.id) AS trackCount
+                    FROM album
+                    LEFT JOIN track ON track.albumId = album.id
+                    GROUP BY album.id
+                    ORDER BY \(ordering) \(dir)
+                    """
+                return try AlbumInfo.fetchAll(db, sql: sql)
+            } else {
+                let pattern = "%\(search)%"
+                let sql = """
+                    SELECT
+                        album.id, album.name, album.artistName, album.year, album.artistId,
+                        COUNT(track.id) AS trackCount
+                    FROM album
+                    LEFT JOIN track ON track.albumId = album.id
+                    WHERE album.name LIKE ? OR album.artistName LIKE ?
+                    GROUP BY album.id
+                    ORDER BY album.name
+                    """
+                return try AlbumInfo.fetchAll(db, sql: sql, arguments: [pattern, pattern])
+            }
         }
+    }
+
+    private func reobserve() {
+        guard let db = appDatabase else { return }
+        observer?.reobserve(in: db.pool, observation: makeObservation())
     }
 
     private func removeAlbum(_ album: AlbumInfo) {
@@ -77,7 +116,6 @@ struct AlbumGridView: View {
         try? db.albums.delete(id: album.id)
         try? db.artwork.delete(ownerType: "album", ownerId: album.id)
         try? db.artists.deleteOrphaned()
-        loadAlbums()
     }
 }
 

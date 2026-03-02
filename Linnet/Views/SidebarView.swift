@@ -1,5 +1,6 @@
 import SwiftUI
 import LinnetLibrary
+import GRDB
 
 struct SidebarView: View {
     @Binding var selectedItem: SidebarItem?
@@ -8,9 +9,11 @@ struct SidebarView: View {
     @State private var showNewPlaylistSheet = false
     @State private var renamingPlaylist: PlaylistRecord?
     @State private var renameText = ""
-    @State private var playlists: [PlaylistRecord] = []
+    @State private var observer: DatabaseObserver<[PlaylistRecord]>?
     @Environment(\.appDatabase) private var appDatabase
     @Environment(PlayerViewModel.self) private var player
+
+    private var playlists: [PlaylistRecord] { observer?.value ?? [] }
 
     var body: some View {
         List(selection: $selectedItem) {
@@ -125,7 +128,12 @@ struct SidebarView: View {
         .listStyle(.sidebar)
         .task {
             configuration.mergeDefaults()
-            loadPlaylists()
+            guard let db = appDatabase else { return }
+            observer = DatabaseObserver(
+                initial: [],
+                in: db.pool,
+                observation: makeObservation()
+            )
         }
         .sheet(isPresented: $showEditSheet) {
             EditSidebarSheet(configuration: $configuration)
@@ -140,7 +148,6 @@ struct SidebarView: View {
                 if var playlist = renamingPlaylist, !renameText.trimmingCharacters(in: .whitespaces).isEmpty {
                     playlist.name = renameText.trimmingCharacters(in: .whitespaces)
                     try? appDatabase?.playlists.update(playlist)
-                    loadPlaylists()
                 }
                 renamingPlaylist = nil
             }
@@ -161,22 +168,24 @@ struct SidebarView: View {
         .tag(item)
     }
 
-    // MARK: - Helpers
+    // MARK: - Observation
 
-    private func loadPlaylists() {
-        playlists = (try? appDatabase?.playlists.fetchAllByCreatedAt()) ?? []
+    private func makeObservation() -> ValueObservation<ValueReducers.Fetch<[PlaylistRecord]>> {
+        ValueObservation.tracking { db in
+            try PlaylistRecord.order(Column("createdAt")).fetchAll(db)
+        }
     }
+
+    // MARK: - Helpers
 
     private func deletePlaylist(_ playlist: PlaylistRecord) {
         guard let id = playlist.id else { return }
         try? appDatabase?.playlists.delete(id: id)
-        loadPlaylists()
     }
 
     private func duplicatePlaylist(_ playlist: PlaylistRecord) {
         guard let id = playlist.id else { return }
         try? appDatabase?.playlists.duplicate(playlistId: id, newName: "\(playlist.name) Copy")
-        loadPlaylists()
     }
 
     private func setVisibility(of item: SidebarItem, visible: Bool) {
