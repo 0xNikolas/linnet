@@ -93,9 +93,13 @@ struct FolderBrowserView: View {
 
     private func removeFolder(_ folder: WatchedFolderRecord) {
         guard let db = appDatabase else { return }
-        try? db.tracks.deleteByFolder(pathPrefix: folder.path)
-        try? db.watchedFolders.deleteByPath(folder.path)
-        try? db.albums.deleteOrphaned()
-        try? db.artists.deleteOrphaned()
+        do {
+            try db.tracks.deleteByFolder(pathPrefix: folder.path)
+            try db.watchedFolders.deleteByPath(folder.path)
+            try db.albums.deleteOrphaned()
+            try db.artists.deleteOrphaned()
+        } catch {
+            Log.database.error("Failed to remove folder \(folder.path): \(error)")
+        }
     }
 }

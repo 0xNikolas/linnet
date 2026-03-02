@@ -110,12 +110,16 @@ struct AlbumGridView: View {
     private func removeAlbum(_ album: AlbumInfo) {
         guard let db = appDatabase else { return }
         let tracks = (try? db.tracks.fetchInfoByAlbum(id: album.id)) ?? []
-        for track in tracks {
-            try? db.tracks.delete(id: track.id)
+        do {
+            for track in tracks {
+                try db.tracks.delete(id: track.id)
+            }
+            try db.albums.delete(id: album.id)
+            try db.artwork.delete(ownerType: "album", ownerId: album.id)
+            try db.artists.deleteOrphaned()
+        } catch {
+            Log.database.error("Failed to remove album \(album.id): \(error)")
         }
-        try? db.albums.delete(id: album.id)
-        try? db.artwork.delete(ownerType: "album", ownerId: album.id)
-        try? db.artists.deleteOrphaned()
     }
 }
 
@@ -160,7 +164,7 @@ private struct AlbumGridItem: View {
             Button {
                 Task {
                     guard let db = appDatabase else { return }
-                    try? db.artwork.delete(ownerType: "album", ownerId: album.id)
+                    do { try db.artwork.delete(ownerType: "album", ownerId: album.id) } catch { Log.database.error("Failed to delete album artwork \(album.id): \(error)") }
                     artwork = nil
                     isFetching = true
                     let found = await artworkService.fetchAlbumArtwork(albumId: album.id, albumName: album.name, artistName: album.artistName, db: db, force: true)
@@ -203,7 +207,7 @@ private struct AlbumGridItem: View {
         panel.message = "Choose artwork for \"\(album.name)\""
         if panel.runModal() == .OK, let url = panel.url,
            let data = try? Data(contentsOf: url) {
-            try? appDatabase?.artwork.upsert(ownerType: "album", ownerId: album.id, imageData: data, thumbnailData: nil)
+            do { try appDatabase?.artwork.upsert(ownerType: "album", ownerId: album.id, imageData: data, thumbnailData: nil) } catch { Log.database.error("Failed to upsert album artwork \(album.id): \(error)") }
             artwork = NSImage(data: data)
         }
     }

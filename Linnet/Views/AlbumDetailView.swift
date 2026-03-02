@@ -213,18 +213,22 @@ struct AlbumDetailView: View {
         if panel.runModal() == .OK, let url = panel.url,
            let data = try? Data(contentsOf: url) {
             guard let albumId = album.id, let db = appDatabase else { return }
-            try? db.artwork.upsert(ownerType: "album", ownerId: albumId, imageData: data, thumbnailData: nil)
+            do { try db.artwork.upsert(ownerType: "album", ownerId: albumId, imageData: data, thumbnailData: nil) } catch { Log.database.error("Failed to upsert album artwork \(albumId): \(error)") }
             artworkImage = NSImage(data: data)
         }
     }
 
     private func removeTracks(ids: Set<Int64>) {
         guard let db = appDatabase else { return }
-        for id in ids {
-            try? db.tracks.delete(id: id)
+        do {
+            for id in ids {
+                try db.tracks.delete(id: id)
+            }
+            try db.albums.deleteOrphaned()
+            try db.artists.deleteOrphaned()
+        } catch {
+            Log.database.error("Failed to remove tracks: \(error)")
         }
-        try? db.albums.deleteOrphaned()
-        try? db.artists.deleteOrphaned()
     }
 }
 

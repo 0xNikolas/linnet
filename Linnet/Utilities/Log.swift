@@ -8,6 +8,7 @@ enum Log {
     static let library = Logger(subsystem: "com.linnet.app", category: "library")
     static let artwork = Logger(subsystem: "com.linnet.app", category: "artwork")
     static let general = Logger(subsystem: "com.linnet.app", category: "general")
+    static let database = Logger(subsystem: "com.linnet.app", category: "database")
     #else
     static let ui = Logger(.disabled)
     static let navigation = Logger(.disabled)
@@ -15,5 +16,6 @@ enum Log {
     static let library = Logger(.disabled)
     static let artwork = Logger(.disabled)
     static let general = Logger(.disabled)
+    static let database = Logger(.disabled)
     #endif
 }

@@ -106,12 +106,16 @@ struct ArtistListView: View {
     private func removeArtist(_ artist: ArtistInfo) {
         guard let db = appDatabase else { return }
         let tracks = (try? db.tracks.fetchInfoByArtist(id: artist.id)) ?? []
-        for track in tracks {
-            try? db.tracks.delete(id: track.id)
+        do {
+            for track in tracks {
+                try db.tracks.delete(id: track.id)
+            }
+            try db.albums.deleteOrphaned()
+            try db.artists.delete(id: artist.id)
+            try db.artwork.delete(ownerType: "artist", ownerId: artist.id)
+        } catch {
+            Log.database.error("Failed to remove artist \(artist.id): \(error)")
         }
-        try? db.albums.deleteOrphaned()
-        try? db.artists.delete(id: artist.id)
-        try? db.artwork.delete(ownerType: "artist", ownerId: artist.id)
     }
 }
 
@@ -168,7 +172,7 @@ private struct ArtistRow: View {
             Button {
                 Task {
                     guard let db = appDatabase else { return }
-                    try? db.artwork.delete(ownerType: "artist", ownerId: artist.id)
+                    do { try db.artwork.delete(ownerType: "artist", ownerId: artist.id) } catch { Log.database.error("Failed to delete artist artwork \(artist.id): \(error)") }
                     artwork = nil
                     isFetching = true
                     let found = await artworkService.fetchArtistArtwork(artistId: artist.id, artistName: artist.name, db: db, force: true)
@@ -197,7 +201,7 @@ private struct ArtistRow: View {
         panel.message = "Choose artwork for \"\(artist.name)\""
         if panel.runModal() == .OK, let url = panel.url,
            let data = try? Data(contentsOf: url) {
-            try? appDatabase?.artwork.upsert(ownerType: "artist", ownerId: artist.id, imageData: data, thumbnailData: nil)
+            do { try appDatabase?.artwork.upsert(ownerType: "artist", ownerId: artist.id, imageData: data, thumbnailData: nil) } catch { Log.database.error("Failed to upsert artist artwork \(artist.id): \(error)") }
             artwork = NSImage(data: data)
         }
     }

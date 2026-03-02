@@ -162,11 +162,11 @@ struct PlaylistsView: View {
 
     private func createPlaylist() {
         var playlist = PlaylistRecord(name: "New Playlist")
-        _ = try? appDatabase?.playlists.insert(&playlist)
+        do { try appDatabase?.playlists.insert(&playlist) } catch { Log.database.error("Failed to create playlist: \(error)") }
     }
 
     private func deletePlaylist(_ playlist: PlaylistRecord) {
         guard let id = playlist.id else { return }
-        try? appDatabase?.playlists.delete(id: id)
+        do { try appDatabase?.playlists.delete(id: id) } catch { Log.database.error("Failed to delete playlist \(id): \(error)") }
     }
 }

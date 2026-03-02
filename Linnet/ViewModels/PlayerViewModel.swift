@@ -248,7 +248,7 @@ public final class PlayerViewModel {
         let newStatus = track.likedStatus == 1 ? 0 : 1
         track.likedStatus = newStatus
         queuedTracks[queue.currentIndex] = track
-        try? appDatabase?.tracks.updateLikedStatus(filePath: track.filePath, status: newStatus)
+        do { try appDatabase?.tracks.updateLikedStatus(filePath: track.filePath, status: newStatus) } catch { Log.database.error("Failed to update liked status for \(track.filePath): \(error)") }
     }
 
     func toggleDislike() {
@@ -256,7 +256,7 @@ public final class PlayerViewModel {
         let newStatus = track.likedStatus == -1 ? 0 : -1
         track.likedStatus = newStatus
         queuedTracks[queue.currentIndex] = track
-        try? appDatabase?.tracks.updateLikedStatus(filePath: track.filePath, status: newStatus)
+        do { try appDatabase?.tracks.updateLikedStatus(filePath: track.filePath, status: newStatus) } catch { Log.database.error("Failed to update liked status for \(track.filePath): \(error)") }
     }
 
     func loadAndPlay(filePath: String) {
@@ -304,7 +304,7 @@ public final class PlayerViewModel {
                             if let newBookmark = try? url.bookmarkData(options: .withSecurityScope, includingResourceValuesForKeys: nil, relativeTo: nil) {
                                 var updated = folder
                                 updated.bookmarkData = newBookmark
-                                try? appDatabase?.watchedFolders.update(updated)
+                                do { try appDatabase?.watchedFolders.update(updated) } catch { Log.database.error("Failed to update folder bookmark: \(error)") }
                                 refreshCachedFolders()
                             }
                         }
@@ -329,7 +329,7 @@ public final class PlayerViewModel {
                 currentArtworkData = try? db.artwork.fetchImageData(ownerType: "track", ownerId: trackId)
             }
         }
-        try? appDatabase?.tracks.updatePlayCount(filePath: track.filePath)
+        do { try appDatabase?.tracks.updatePlayCount(filePath: track.filePath) } catch { Log.database.error("Failed to update play count for \(track.filePath): \(error)") }
     }
 
     // MARK: - Time Updates

@@ -95,11 +95,14 @@ struct NewPlaylistSheet: View {
         guard let db = appDatabase else { return }
         let name = playlistName.trimmingCharacters(in: .whitespaces)
         var playlist = PlaylistRecord(name: name)
-        try? db.playlists.insert(&playlist)
-
-        if let playlistId = playlist.id {
-            let trackIds = tracks.compactMap { $0.id as Int64? }
-            try? db.playlists.addTracks(trackIds: trackIds, toPlaylist: playlistId)
+        do {
+            try db.playlists.insert(&playlist)
+            if let playlistId = playlist.id {
+                let trackIds = tracks.compactMap { $0.id as Int64? }
+                try db.playlists.addTracks(trackIds: trackIds, toPlaylist: playlistId)
+            }
+        } catch {
+            Log.database.error("Failed to create playlist '\(name)': \(error)")
         }
     }
 }

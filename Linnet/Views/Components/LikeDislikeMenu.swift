@@ -12,13 +12,13 @@ struct LikeDislikeMenu: View {
         Button {
             let newStatus = allLiked ? 0 : 1
             for track in tracks {
-                try? appDatabase?.tracks.updateLikedStatus(filePath: track.filePath, status: newStatus)
+                do { try appDatabase?.tracks.updateLikedStatus(filePath: track.filePath, status: newStatus) } catch { Log.database.error("Failed to update liked status for \(track.filePath): \(error)") }
             }
         } label: { Label(allLiked ? "Remove Like" : "Like", systemImage: allLiked ? "heart.slash" : "heart") }
         Button {
             let newStatus = allDisliked ? 0 : -1
             for track in tracks {
-                try? appDatabase?.tracks.updateLikedStatus(filePath: track.filePath, status: newStatus)
+                do { try appDatabase?.tracks.updateLikedStatus(filePath: track.filePath, status: newStatus) } catch { Log.database.error("Failed to update liked status for \(track.filePath): \(error)") }
             }
         } label: { Label(allDisliked ? "Remove Dislike" : "Dislike", systemImage: allDisliked ? "hand.thumbsdown.fill" : "hand.thumbsdown") }
     }

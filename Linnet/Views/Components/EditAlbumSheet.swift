@@ -100,14 +100,17 @@ struct EditAlbumSheet: View {
         updated.name = name
         updated.artistName = artistName.isEmpty ? nil : artistName
         updated.year = Int(yearText)
-        try? db.albums.update(updated)
-
-        if let data = newArtworkData {
-            if data.isEmpty {
-                try? db.artwork.delete(ownerType: "album", ownerId: albumId)
-            } else {
-                try? db.artwork.upsert(ownerType: "album", ownerId: albumId, imageData: data, thumbnailData: nil)
+        do {
+            try db.albums.update(updated)
+            if let data = newArtworkData {
+                if data.isEmpty {
+                    try db.artwork.delete(ownerType: "album", ownerId: albumId)
+                } else {
+                    try db.artwork.upsert(ownerType: "album", ownerId: albumId, imageData: data, thumbnailData: nil)
+                }
             }
+        } catch {
+            Log.database.error("Failed to save album \(albumId): \(error)")
         }
 
         dismiss()

@@ -251,19 +251,27 @@ struct ArtistDetailView: View {
 
     private func removeTrack(_ track: TrackInfo) {
         guard let db = appDatabase else { return }
-        try? db.tracks.delete(id: track.id)
-        try? db.albums.deleteOrphaned()
-        try? db.artists.deleteOrphaned()
+        do {
+            try db.tracks.delete(id: track.id)
+            try db.albums.deleteOrphaned()
+            try db.artists.deleteOrphaned()
+        } catch {
+            Log.database.error("Failed to remove track \(track.id): \(error)")
+        }
     }
 
     private func removeAlbum(_ albumInfo: AlbumInfo) {
         guard let db = appDatabase else { return }
         let albumTracks = (try? db.tracks.fetchInfoByAlbum(id: albumInfo.id)) ?? []
-        for track in albumTracks {
-            try? db.tracks.delete(id: track.id)
+        do {
+            for track in albumTracks {
+                try db.tracks.delete(id: track.id)
+            }
+            try db.albums.delete(id: albumInfo.id)
+            try db.artists.deleteOrphaned()
+        } catch {
+            Log.database.error("Failed to remove album \(albumInfo.id): \(error)")
         }
-        try? db.albums.delete(id: albumInfo.id)
-        try? db.artists.deleteOrphaned()
     }
 
     private func chooseArtistArtwork() {
@@ -275,7 +283,7 @@ struct ArtistDetailView: View {
         if panel.runModal() == .OK, let url = panel.url,
            let data = try? Data(contentsOf: url) {
             guard let artistId = artist.id, let db = appDatabase else { return }
-            try? db.artwork.upsert(ownerType: "artist", ownerId: artistId, imageData: data, thumbnailData: nil)
+            do { try db.artwork.upsert(ownerType: "artist", ownerId: artistId, imageData: data, thumbnailData: nil) } catch { Log.database.error("Failed to upsert artist artwork \(artistId): \(error)") }
             artworkImage = NSImage(data: data)
         }
     }
@@ -401,7 +409,7 @@ private struct ArtistAlbumCard: View {
         if panel.runModal() == .OK, let url = panel.url,
            let data = try? Data(contentsOf: url) {
             guard let db = appDatabase else { return }
-            try? db.artwork.upsert(ownerType: "album", ownerId: albumInfo.id, imageData: data, thumbnailData: nil)
+            do { try db.artwork.upsert(ownerType: "album", ownerId: albumInfo.id, imageData: data, thumbnailData: nil) } catch { Log.database.error("Failed to upsert album artwork \(albumInfo.id): \(error)") }
             artwork = NSImage(data: data)
         }
     }

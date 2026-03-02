@@ -187,20 +187,28 @@ struct ListenNowView: View {
 
     private func removeTrack(_ track: TrackInfo) {
         guard let db = appDatabase else { return }
-        try? db.tracks.delete(id: track.id)
-        try? db.albums.deleteOrphaned()
-        try? db.artists.deleteOrphaned()
+        do {
+            try db.tracks.delete(id: track.id)
+            try db.albums.deleteOrphaned()
+            try db.artists.deleteOrphaned()
+        } catch {
+            Log.database.error("Failed to remove track \(track.id): \(error)")
+        }
     }
 
     private func removeAlbum(_ album: AlbumInfo) {
         guard let db = appDatabase else { return }
         let tracks = (try? db.tracks.fetchInfoByAlbum(id: album.id)) ?? []
-        for track in tracks {
-            try? db.tracks.delete(id: track.id)
+        do {
+            for track in tracks {
+                try db.tracks.delete(id: track.id)
+            }
+            try db.albums.delete(id: album.id)
+            try db.artwork.delete(ownerType: "album", ownerId: album.id)
+            try db.artists.deleteOrphaned()
+        } catch {
+            Log.database.error("Failed to remove album \(album.id): \(error)")
         }
-        try? db.albums.delete(id: album.id)
-        try? db.artwork.delete(ownerType: "album", ownerId: album.id)
-        try? db.artists.deleteOrphaned()
     }
 }
 

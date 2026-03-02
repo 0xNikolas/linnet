@@ -16,7 +16,7 @@ public final class LibraryViewModel {
     func addFolder(url: URL, db: AppDatabase) {
         let bookmark = try? url.bookmarkData(options: .withSecurityScope, includingResourceValuesForKeys: nil, relativeTo: nil)
         var folder = WatchedFolderRecord(path: url.path, bookmarkData: bookmark)
-        try? db.watchedFolders.insert(&folder)
+        do { try db.watchedFolders.insert(&folder) } catch { Log.database.error("Failed to insert watched folder \(url.path): \(error)") }
 
         scanFolder(url: url, db: db)
 
@@ -58,7 +58,7 @@ public final class LibraryViewModel {
                     let results = try await libraryManager.scanFolder(url: folderURL)
                     let count = try await libraryManager.importResults(results, into: db.pool)
                     totalImported += count
-                    try? db.watchedFolders.updateLastScanned(id: folder.id!)
+                    do { try db.watchedFolders.updateLastScanned(id: folder.id!) } catch { Log.database.error("Failed to update last scanned for folder \(folder.id!): \(error)") }
                 } catch {
                     scanProgress = "Error scanning \(folder.path): \(error.localizedDescription)"
                 }
@@ -79,7 +79,7 @@ public final class LibraryViewModel {
                     if let newBookmark = try? url.bookmarkData(options: .withSecurityScope, includingResourceValuesForKeys: nil, relativeTo: nil) {
                         var updated = folder
                         updated.bookmarkData = newBookmark
-                        try? db.watchedFolders.update(updated)
+                        do { try db.watchedFolders.update(updated) } catch { Log.database.error("Failed to update folder bookmark: \(error)") }
                     }
                 }
                 return url

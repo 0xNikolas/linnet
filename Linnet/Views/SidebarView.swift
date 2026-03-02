@@ -147,7 +147,7 @@ struct SidebarView: View {
             Button("Rename") {
                 if var playlist = renamingPlaylist, !renameText.trimmingCharacters(in: .whitespaces).isEmpty {
                     playlist.name = renameText.trimmingCharacters(in: .whitespaces)
-                    try? appDatabase?.playlists.update(playlist)
+                    do { try appDatabase?.playlists.update(playlist) } catch { Log.database.error("Failed to rename playlist: \(error)") }
                 }
                 renamingPlaylist = nil
             }
@@ -180,12 +180,12 @@ struct SidebarView: View {
 
     private func deletePlaylist(_ playlist: PlaylistRecord) {
         guard let id = playlist.id else { return }
-        try? appDatabase?.playlists.delete(id: id)
+        do { try appDatabase?.playlists.delete(id: id) } catch { Log.database.error("Failed to delete playlist \(id): \(error)") }
     }
 
     private func duplicatePlaylist(_ playlist: PlaylistRecord) {
         guard let id = playlist.id else { return }
-        try? appDatabase?.playlists.duplicate(playlistId: id, newName: "\(playlist.name) Copy")
+        do { try appDatabase?.playlists.duplicate(playlistId: id, newName: "\(playlist.name) Copy") } catch { Log.database.error("Failed to duplicate playlist \(id): \(error)") }
     }
 
     private func setVisibility(of item: SidebarItem, visible: Bool) {

@@ -211,7 +211,7 @@ struct PlaylistDetailView: View {
     }
 
     private func removeSelectedTracks(_ ids: Set<Int64>) {
-        try? appDatabase?.playlists.removeEntries(trackIds: ids, fromPlaylist: playlistID)
+        do { try appDatabase?.playlists.removeEntries(trackIds: ids, fromPlaylist: playlistID) } catch { Log.database.error("Failed to remove playlist entries: \(error)") }
         selectedTrackIDs = []
     }
 }

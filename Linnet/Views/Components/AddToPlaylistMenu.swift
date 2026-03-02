@@ -36,6 +36,6 @@ struct AddToPlaylistMenu: View {
     private func addTracks(to playlist: PlaylistRecord) {
         guard let db = appDatabase, let playlistId = playlist.id else { return }
         let trackIds = tracks.map(\.id)
-        try? db.playlists.addTracks(trackIds: trackIds, toPlaylist: playlistId)
+        do { try db.playlists.addTracks(trackIds: trackIds, toPlaylist: playlistId) } catch { Log.database.error("Failed to add tracks to playlist \(playlistId): \(error)") }
     }
 }

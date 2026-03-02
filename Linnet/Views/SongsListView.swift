@@ -90,11 +90,15 @@ struct SongsListView: View {
 
     private func removeTracks(ids: Set<Int64>) {
         guard let db = appDatabase else { return }
-        for id in ids {
-            try? db.tracks.delete(id: id)
+        do {
+            for id in ids {
+                try db.tracks.delete(id: id)
+            }
+            try db.albums.deleteOrphaned()
+            try db.artists.deleteOrphaned()
+        } catch {
+            Log.database.error("Failed to remove tracks: \(error)")
         }
-        try? db.albums.deleteOrphaned()
-        try? db.artists.deleteOrphaned()
     }
 }
 
