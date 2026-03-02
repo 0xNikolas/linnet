@@ -2,6 +2,9 @@ import SwiftUI
 import LinnetLibrary
 import GRDB
 
+// File-level cache -- survives SwiftUI view lifecycle
+private nonisolated(unsafe) var _likedSongsCache: [TrackInfo]?
+
 struct LikedSongsView: View {
     @Environment(\.appDatabase) private var appDatabase
     @Binding var highlightedTrackID: Int64?
@@ -19,11 +22,29 @@ struct LikedSongsView: View {
             }
             .task {
                 guard let db = appDatabase else { return }
+                let initial = _likedSongsCache ?? (
+                    (try? db.pool.read { db in
+                        try TrackInfo.fetchAll(db, sql: """
+                            SELECT
+                                track.*,
+                                artist.name AS artistName,
+                                album.name AS albumName
+                            FROM track
+                            LEFT JOIN artist ON track.artistId = artist.id
+                            LEFT JOIN album ON track.albumId = album.id
+                            WHERE track.likedStatus = 1
+                            ORDER BY track.title COLLATE NOCASE ASC
+                            """)
+                    }) ?? []
+                )
                 observer = DatabaseObserver(
-                    initial: [],
+                    initial: initial,
                     in: db.pool,
                     observation: makeObservation()
                 )
+            }
+            .onChange(of: observer?.value) {
+                _likedSongsCache = observer?.value
             }
             .onChange(of: sortOption) { _, _ in reobserve() }
             .onChange(of: sortDirection) { _, _ in reobserve() }

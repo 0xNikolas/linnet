@@ -7,6 +7,9 @@ private struct ListenNowData: Sendable {
     let recentTracks: [TrackInfo]
 }
 
+// File-level cache -- survives SwiftUI view lifecycle
+private nonisolated(unsafe) var _listenNowCache: ListenNowData?
+
 struct ListenNowView: View {
     @Environment(\.appDatabase) private var appDatabase
     @Environment(PlayerViewModel.self) private var player
@@ -110,11 +113,43 @@ struct ListenNowView: View {
         }
         .task {
             guard let db = appDatabase else { return }
+            let initial = _listenNowCache ?? (
+                (try? db.pool.read { db in
+                    let albumSql = """
+                        SELECT
+                            album.id, album.name, album.artistName, album.year, album.artistId,
+                            COUNT(track.id) AS trackCount
+                        FROM album
+                        LEFT JOIN track ON track.albumId = album.id
+                        GROUP BY album.id
+                        ORDER BY album.name COLLATE NOCASE ASC
+                        """
+                    let albums = try AlbumInfo.fetchAll(db, sql: albumSql)
+                    let trackSql = """
+                        SELECT
+                            track.*,
+                            artist.name AS artistName,
+                            album.name AS albumName
+                        FROM track
+                        LEFT JOIN artist ON track.artistId = artist.id
+                        LEFT JOIN album ON track.albumId = album.id
+                        ORDER BY track.dateAdded DESC
+                        LIMIT ?
+                        """
+                    let recentTracks = try TrackInfo.fetchAll(db, sql: trackSql, arguments: [20])
+                    return ListenNowData(albums: albums, recentTracks: recentTracks)
+                }) ?? ListenNowData(albums: [], recentTracks: [])
+            )
             observer = DatabaseObserver(
-                initial: ListenNowData(albums: [], recentTracks: []),
+                initial: initial,
                 in: db.pool,
                 observation: makeObservation()
             )
+        }
+        .onChange(of: albums.count) {
+            if searchText.isEmpty {
+                _listenNowCache = observer?.value
+            }
         }
         .onChange(of: searchText) { _, _ in reobserve() }
     }

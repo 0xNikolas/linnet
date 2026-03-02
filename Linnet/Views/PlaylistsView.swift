@@ -7,6 +7,9 @@ private struct PlaylistWithCount: Sendable {
     let songCount: Int
 }
 
+// File-level cache -- survives SwiftUI view lifecycle
+private nonisolated(unsafe) var _playlistsCache: [PlaylistWithCount]?
+
 struct PlaylistsView: View {
     @Environment(\.appDatabase) private var appDatabase
     @Environment(\.navigationPath) private var navigationPath
@@ -91,11 +94,40 @@ struct PlaylistsView: View {
         }
         .task {
             guard let db = appDatabase else { return }
+            let initial = _playlistsCache ?? (
+                (try? db.pool.read { db in
+                    let sql = """
+                        SELECT
+                            playlist.*,
+                            COUNT(playlistEntry.id) AS songCount
+                        FROM playlist
+                        LEFT JOIN playlistEntry ON playlistEntry.playlistId = playlist.id
+                        GROUP BY playlist.id
+                        ORDER BY playlist.createdAt ASC
+                        """
+                    let rows = try Row.fetchAll(db, sql: sql)
+                    return rows.map { row in
+                        let record = PlaylistRecord(
+                            id: row["id"],
+                            name: row["name"],
+                            isAIGenerated: row["isAIGenerated"],
+                            createdAt: row["createdAt"]
+                        )
+                        let count: Int = row["songCount"]
+                        return PlaylistWithCount(playlist: record, songCount: count)
+                    }
+                }) ?? []
+            )
             observer = DatabaseObserver(
-                initial: [],
+                initial: initial,
                 in: db.pool,
                 observation: makeObservation()
             )
+        }
+        .onChange(of: playlists.count) {
+            if searchText.isEmpty {
+                _playlistsCache = observer?.value
+            }
         }
         .onChange(of: searchText) { _, _ in reobserve() }
         .onChange(of: sortOption) { _, _ in reobserve() }

@@ -34,6 +34,9 @@ private struct SongsData: Sendable {
     let sections: [TrackSection]
 }
 
+// File-level cache -- survives SwiftUI view lifecycle
+private nonisolated(unsafe) var _songsCache: SongsData?
+
 // MARK: - FTS5 helper (mirrors TrackRepository)
 
 private func sanitizedFTSQuery(_ query: String) -> String? {
@@ -98,11 +101,32 @@ struct SongsGroupingView: View {
         }
         .task {
             guard let db = appDatabase else { return }
+            let initial = _songsCache ?? (
+                (try? db.pool.read { db in
+                    let sql = """
+                        SELECT
+                            track.*,
+                            artist.name AS artistName,
+                            album.name AS albumName
+                        FROM track
+                        LEFT JOIN artist ON track.artistId = artist.id
+                        LEFT JOIN album ON track.albumId = album.id
+                        ORDER BY track.title COLLATE NOCASE ASC
+                        """
+                    let tracks = try TrackInfo.fetchAll(db, sql: sql)
+                    return SongsData(tracks: tracks, sections: [])
+                }) ?? SongsData(tracks: [], sections: [])
+            )
             observer = DatabaseObserver(
-                initial: SongsData(tracks: [], sections: []),
+                initial: initial,
                 in: db.pool,
                 observation: makeObservation()
             )
+        }
+        .onChange(of: tracks.count) {
+            if searchText.isEmpty {
+                _songsCache = observer?.value
+            }
         }
         .onChange(of: grouping) { _, _ in reobserve() }
         .onChange(of: sortOption) { _, _ in reobserve() }

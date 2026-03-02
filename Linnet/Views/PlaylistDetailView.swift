@@ -13,6 +13,9 @@ private struct PlaylistDetailData: Sendable {
     let tracks: [TrackInfo]
 }
 
+// File-level cache -- survives SwiftUI view lifecycle (keyed by playlist ID)
+private nonisolated(unsafe) var _playlistDetailCache: [Int64: PlaylistDetailData] = [:]
+
 struct PlaylistDetailView: View {
     let playlistID: Int64
     @Environment(PlayerViewModel.self) private var player
@@ -36,8 +39,28 @@ struct PlaylistDetailView: View {
         }
         .task(id: playlistID) {
             guard let db = appDatabase else { return }
+            let pid = playlistID
+            let initial = _playlistDetailCache[pid] ?? (
+                (try? db.pool.read { db in
+                    let playlist = try PlaylistRecord.fetchOne(db, id: pid)
+                    let sql = """
+                        SELECT
+                            track.*,
+                            artist.name AS artistName,
+                            album.name AS albumName
+                        FROM playlistEntry
+                        JOIN track ON playlistEntry.trackId = track.id
+                        LEFT JOIN artist ON track.artistId = artist.id
+                        LEFT JOIN album ON track.albumId = album.id
+                        WHERE playlistEntry.playlistId = ?
+                        ORDER BY playlistEntry."order"
+                        """
+                    let tracks = try TrackInfo.fetchAll(db, sql: sql, arguments: [pid])
+                    return PlaylistDetailData(playlist: playlist, tracks: tracks)
+                }) ?? PlaylistDetailData(playlist: nil, tracks: [])
+            )
             observer = DatabaseObserver(
-                initial: PlaylistDetailData(playlist: nil, tracks: []),
+                initial: initial,
                 in: db.pool,
                 observation: makeObservation()
             )
@@ -48,6 +71,9 @@ struct PlaylistDetailView: View {
                     userInfo: ["title": name]
                 )
             }
+        }
+        .onChange(of: tracks.count) {
+            _playlistDetailCache[playlistID] = observer?.value
         }
     }
 

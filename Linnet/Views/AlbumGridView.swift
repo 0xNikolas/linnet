@@ -3,6 +3,9 @@ import LinnetLibrary
 import GRDB
 import UniformTypeIdentifiers
 
+// File-level cache -- survives SwiftUI view lifecycle
+private nonisolated(unsafe) var _albumGridCache: [AlbumInfo]?
+
 struct AlbumGridView: View {
     @Environment(\.appDatabase) private var appDatabase
     @Environment(ArtworkService.self) private var artworkService
@@ -58,11 +61,29 @@ struct AlbumGridView: View {
         }
         .task {
             guard let db = appDatabase else { return }
+            let initial = _albumGridCache ?? (
+                (try? db.pool.read { db in
+                    try AlbumInfo.fetchAll(db, sql: """
+                        SELECT
+                            album.id, album.name, album.artistName, album.year, album.artistId,
+                            COUNT(track.id) AS trackCount
+                        FROM album
+                        LEFT JOIN track ON track.albumId = album.id
+                        GROUP BY album.id
+                        ORDER BY album.name COLLATE NOCASE ASC
+                        """)
+                }) ?? []
+            )
             observer = DatabaseObserver(
-                initial: [],
+                initial: initial,
                 in: db.pool,
                 observation: makeObservation()
             )
+        }
+        .onChange(of: albums) {
+            if searchText.isEmpty {
+                _albumGridCache = albums
+            }
         }
         .onChange(of: searchText) { _, _ in reobserve() }
         .onChange(of: sortOption) { _, _ in reobserve() }

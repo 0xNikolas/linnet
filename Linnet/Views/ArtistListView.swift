@@ -3,6 +3,9 @@ import LinnetLibrary
 import GRDB
 import UniformTypeIdentifiers
 
+// File-level cache -- survives SwiftUI view lifecycle
+private nonisolated(unsafe) var _artistListCache: [ArtistInfo]?
+
 struct ArtistListView: View {
     @Environment(\.appDatabase) private var appDatabase
     @Environment(\.navigationPath) private var navigationPath
@@ -50,11 +53,30 @@ struct ArtistListView: View {
         }
         .task {
             guard let db = appDatabase else { return }
+            let initial = _artistListCache ?? (
+                (try? db.pool.read { db in
+                    try ArtistInfo.fetchAll(db, sql: """
+                        SELECT artist.id, artist.name,
+                            COUNT(DISTINCT album.id) AS albumCount,
+                            COUNT(DISTINCT track.id) AS trackCount
+                        FROM artist
+                        LEFT JOIN album ON album.artistId = artist.id
+                        LEFT JOIN track ON track.artistId = artist.id
+                        GROUP BY artist.id
+                        ORDER BY artist.name COLLATE NOCASE ASC
+                        """)
+                }) ?? []
+            )
             observer = DatabaseObserver(
-                initial: [],
+                initial: initial,
                 in: db.pool,
                 observation: makeObservation()
             )
+        }
+        .onChange(of: artists) {
+            if searchText.isEmpty {
+                _artistListCache = artists
+            }
         }
         .onChange(of: searchText) { _, _ in reobserve() }
         .onChange(of: sortOption) { _, _ in reobserve() }
