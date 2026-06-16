@@ -230,9 +230,9 @@ private struct SongsTableView: View {
                 Text(track.title)
                     .font(.app(size: 13))
                 if track.likedStatus == 1 {
-                    Image(systemName: "heart.fill")
+                    Image(systemName: "bolt.fill")
                         .font(.app(size: 9))
-                        .foregroundStyle(.red)
+                        .foregroundStyle(.tint)
                 }
             }
             .opacity(track.likedStatus == -1 ? 0.5 : 1.0)

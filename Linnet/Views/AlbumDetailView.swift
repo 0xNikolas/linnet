@@ -188,7 +188,7 @@ struct AlbumDetailView: View {
                 observation: makeObservation(albumId: albumId)
             )
         }
-        .onChange(of: tracks.count) {
+        .onChange(of: tracks) {
             guard let albumId = album.id else { return }
             _albumDetailCache[albumId] = tracks
         }

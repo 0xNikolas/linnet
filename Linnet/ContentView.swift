@@ -25,10 +25,12 @@ struct ContentView: View {
             HStack(spacing: 0) {
                 NavigationStack(path: $navigationPath) {
                     ContentArea(sidebarItem: selectedSidebarItem, highlightedTrackID: $highlightedTrackID)
+                        .safeAreaInset(edge: .bottom, spacing: 0) { NowPlayingBar() }
                         .navigationTitle(selectedSidebarItem?.label ?? "Linnet")
                         .navigationDestination(for: AlbumRecord.self) { album in
                             let _ = Log.navigation.debug("Pushing AlbumDetailView: \(album.name)")
                             AlbumDetailView(album: album)
+                                .safeAreaInset(edge: .bottom, spacing: 0) { NowPlayingBar() }
                                 .navigationTitle(selectedSidebarItem?.label ?? "Albums")
                                 .onAppear {
                                     NotificationCenter.default.post(
@@ -43,6 +45,7 @@ struct ContentView: View {
                             ArtistDetailView(artist: artist, onNavigateToAlbum: { album in
                                     navigationPath.append(album)
                                 })
+                                .safeAreaInset(edge: .bottom, spacing: 0) { NowPlayingBar() }
                                 .navigationTitle(selectedSidebarItem?.label ?? "Artists")
                                 .onAppear {
                                     NotificationCenter.default.post(
@@ -54,6 +57,7 @@ struct ContentView: View {
                         }
                         .navigationDestination(for: Int64.self) { id in
                             PlaylistDetailView(playlistID: id)
+                                .safeAreaInset(edge: .bottom, spacing: 0) { NowPlayingBar() }
                                 .navigationTitle("Playlists")
                         }
                 }
@@ -68,9 +72,6 @@ struct ContentView: View {
                 }
             }
             .animation(.easeInOut(duration: 0.2), value: showQueueSidePane)
-        }
-        .safeAreaInset(edge: .bottom) {
-            NowPlayingBar()
         }
         .onChange(of: selectedSidebarItem) { _, newItem in
             navigationPath = NavigationPath()

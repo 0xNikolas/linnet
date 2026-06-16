@@ -83,7 +83,7 @@ struct LinnetApp: App {
                 Divider()
 
                 Button("Shuffle") {
-                    playerViewModel.queue.shuffle()
+                    playerViewModel.shuffleQueue()
                 }
                 .keyboardShortcut("s", modifiers: [.command, .shift])
             }

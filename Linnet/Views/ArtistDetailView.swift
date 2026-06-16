@@ -184,7 +184,7 @@ struct ArtistDetailView: View {
                                 .padding(.horizontal, 20)
                                 .padding(.top, 4)
 
-                            VStack(spacing: 0) {
+                            LazyVStack(spacing: 0) {
                                 ForEach(Array(allTracks.enumerated()), id: \.element.id) { index, track in
                                     ArtistTrackRow(
                                         track: track,
@@ -524,9 +524,9 @@ private struct ArtistTrackRow: View {
             }
 
             if track.likedStatus == 1 {
-                Image(systemName: "heart.fill")
+                Image(systemName: "bolt.fill")
                     .font(.app(size: 10))
-                    .foregroundStyle(.red)
+                    .foregroundStyle(.tint)
             }
 
             Spacer(minLength: 12)

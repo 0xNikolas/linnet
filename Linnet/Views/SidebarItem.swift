@@ -40,7 +40,7 @@ enum SidebarItem: Hashable, Codable {
         case .artists: return "music.mic"
         case .albums: return "square.stack"
         case .songs: return "music.note"
-        case .likedSongs: return "heart.fill"
+        case .likedSongs: return "bolt.fill"
         case .folders: return "folder"
         case .playlists: return "music.note.list"
         case .playlist: return "music.note.list"

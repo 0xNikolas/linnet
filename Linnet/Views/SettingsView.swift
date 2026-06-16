@@ -15,7 +15,7 @@ struct SettingsView: View {
             AISettingsView()
                 .tabItem { Label("AI", systemImage: "sparkles") }
         }
-        .frame(width: 450, height: 350)
+        .frame(width: 480, height: 380)
     }
 }
 
@@ -48,7 +48,7 @@ struct GeneralSettingsView: View {
                 }
             }
         }
-        .padding()
+        .formStyle(.grouped)
     }
 
     private var fontSizeLabel: String {
@@ -337,7 +337,7 @@ struct ArtworkSettingsView: View {
                     .foregroundStyle(.tertiary)
             }
         }
-        .padding()
+        .formStyle(.grouped)
     }
 }
 
@@ -355,6 +355,6 @@ struct AISettingsView: View {
                 Button("Set Up AI...") {}
             }
         }
-        .padding()
+        .formStyle(.grouped)
     }
 }
