@@ -69,6 +69,18 @@ public struct PlaybackQueue: Sendable {
         tracks = Array(tracks[...currentIndex]) + upcoming
     }
 
+    /// Replace the upcoming tracks (everything after the current index), in order.
+    /// Lets a caller apply an externally-computed ordering (e.g. a shuffle that
+    /// must stay in sync with a parallel metadata array).
+    public mutating func setUpcoming(_ newUpcoming: [String]) {
+        guard currentIndex < tracks.count else {
+            tracks = newUpcoming
+            currentIndex = 0
+            return
+        }
+        tracks = Array(tracks[...currentIndex]) + newUpcoming
+    }
+
     public mutating func move(from source: Int, to destination: Int) {
         let adjustedSource = currentIndex + 1 + source
         let adjustedDest = currentIndex + 1 + destination

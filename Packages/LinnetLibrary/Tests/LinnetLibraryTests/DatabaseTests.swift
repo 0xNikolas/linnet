@@ -291,6 +291,29 @@ struct DatabaseTests {
         #expect(updated?.thumbnailData == nil)
     }
 
+    @Test("Deleting an album removes its artwork")
+    func deleteAlbumRemovesArtwork() throws {
+        let db = try makeDB()
+        var album = AlbumRecord(name: "Gone", artistName: nil, year: nil, artistId: nil)
+        try db.albums.insert(&album)
+        try db.artwork.upsert(ownerType: "album", ownerId: album.id!, imageData: Data([0x1]), thumbnailData: nil)
+
+        try db.albums.delete(id: album.id!)
+        #expect(try db.artwork.fetch(ownerType: "album", ownerId: album.id!) == nil)
+    }
+
+    @Test("deleteOrphaned sweeps artwork with no owner")
+    func artworkDeleteOrphaned() throws {
+        let db = try makeDB()
+        // Artwork pointing at non-existent owners.
+        try db.artwork.upsert(ownerType: "album", ownerId: 999, imageData: Data([0x1]), thumbnailData: nil)
+        try db.artwork.upsert(ownerType: "artist", ownerId: 888, imageData: Data([0x2]), thumbnailData: nil)
+
+        try db.artwork.deleteOrphaned()
+        #expect(try db.artwork.fetch(ownerType: "album", ownerId: 999) == nil)
+        #expect(try db.artwork.fetch(ownerType: "artist", ownerId: 888) == nil)
+    }
+
     @Test("Fetch thumbnail only")
     func artworkThumbnail() throws {
         let db = try makeDB()

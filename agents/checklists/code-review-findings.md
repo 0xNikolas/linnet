@@ -21,10 +21,10 @@ Whole-codebase review (app + `LinnetLibrary`, `LinnetAudio`, `LinnetAI`). Items 
 
 ### Library
 - [x] **`DatabaseObserver` extra `Task { @MainActor }` hop** — `Packages/LinnetLibrary/Sources/LinnetLibrary/Database/DatabaseObserver.swift:18`. `.immediate` + unstructured Task can deliver snapshots out of order. Prefer `.async(onQueue: .main)` / mainActor scheduling.
-- [ ] **N+1 duplicate check in import loop** — `Packages/LinnetLibrary/Sources/LinnetLibrary/LibraryManager.swift:62`. `SELECT COUNT(*)` per track per chunk, can't see same-transaction inserts. Use an in-memory set or unique index.
+- [x] **N+1 duplicate check in import loop** — `Packages/LinnetLibrary/Sources/LinnetLibrary/LibraryManager.swift:62`. `SELECT COUNT(*)` per track per chunk, can't see same-transaction inserts. Use an in-memory set or unique index.
 - [x] **Raw-`String` `ORDER BY` column (injection surface)** — `TrackRepository.swift:80`, `AlbumRepository.swift:68`, `ArtistRepository.swift:59`. Use the existing typed sort enums; drop the String overload.
 - [x] **Errors swallowed (ArtworkService)** — `ArtworkService.swift:60,102` returned `true` after a `try?` upsert; now logs and returns `false` on failure. _Still open: `DatabaseLocation.swift:16` `try?` on dir creation — deferred (making `url` throwing touches many call sites)._
-- [ ] **FTS5 full-text search is broken** — `searchAllInfo` in `TrackRepository.swift` issues `... LEFT JOIN trackFts ... WHERE trackFts MATCH ?`, which SQLite rejects: "unable to use function MATCH in the requested context" (caught by the pre-existing failing `FTS5 search by title` test). Restructure as a subquery: `track.id IN (SELECT rowid FROM trackFts WHERE trackFts MATCH ?)`. _(Found while fixing the library package — full-text search currently returns nothing / errors.)_
+- [x] **FTS5 full-text search is broken** — `searchAllInfo` in `TrackRepository.swift` issues `... LEFT JOIN trackFts ... WHERE trackFts MATCH ?`, which SQLite rejects: "unable to use function MATCH in the requested context" (caught by the pre-existing failing `FTS5 search by title` test). Restructure as a subquery: `track.id IN (SELECT rowid FROM trackFts WHERE trackFts MATCH ?)`. _(Found while fixing the library package — full-text search currently returns nothing / errors.)_
 
 ### AI
 - [x] **Path traversal from LLM / library data** — `Packages/LinnetAI/Sources/LinnetAI/SmartFolderOrganizer.swift:53,80`. Track titles flow unsanitized into prompts; LLM-returned `folderName` passed to `FileManager.moveItem` with no containment check. Validate `destURL.standardized` is under `baseDirectory`; strip newlines/separators from titles.
@@ -37,15 +37,15 @@ Whole-codebase review (app + `LinnetLibrary`, `LinnetAudio`, `LinnetAI`). Items 
 ## 🟡 Medium
 
 - [x] **`DetailPage.swift` is dead code** (zero references) and still carries the old `@AppStorage("showQueueSidePane")` toggle removed elsewhere. Delete `Linnet/Views/Components/DetailPage.swift`.
-- [ ] **Stale cache on metadata edits** — caching keyed on `onChange(of: tracks.count)` (`AlbumDetailView.swift:191`, `SongsGroupingView.swift:121`) misses title/like/artwork edits. Key on the observer value.
-- [ ] **Dead UI** — shuffle/repeat buttons are empty closures (`NowPlayingExpandedView.swift:57,82`); model download progress stuck at 0% (`ModelManager.swift:114`).
-- [ ] **`engine.start()` failure swallowed** — `AudioPlayer.swift:126` `try?`; no `AVAudioEngineConfigurationChange` handling → no recovery after device/route changes.
-- [ ] **`artwork` table has no FK/cleanup** — `DatabaseManager.swift:87` → orphan rows accumulate on album/artist delete.
-- [ ] **`copyDatabase` copies WAL/SHM with pool open** — `DatabaseLocation.swift:75` → possible corruption. Use GRDB `backup(to:)`.
+- [x] **Stale cache on metadata edits** — caching keyed on `onChange(of: tracks.count)` (`AlbumDetailView.swift:191`, `SongsGroupingView.swift:121`) misses title/like/artwork edits. Key on the observer value.
+- [x] **Dead UI** — shuffle/repeat buttons are empty closures (`NowPlayingExpandedView.swift:57,82`); model download progress stuck at 0% (`ModelManager.swift:114`).
+- [x] **`engine.start()` failure swallowed** — `AudioPlayer.swift:126` `try?`; no `AVAudioEngineConfigurationChange` handling → no recovery after device/route changes.
+- [x] **`artwork` table has no FK/cleanup** — `DatabaseManager.swift:87` → orphan rows accumulate on album/artist delete.
+- [x] **`copyDatabase` copies WAL/SHM with pool open** — `DatabaseLocation.swift:75` → possible corruption. Use GRDB `backup(to:)`.
 - [x] **`deleteByFolder` LIKE prefix unescaped** — `TrackRepository.swift:383`; `%`/`_` in paths act as wildcards. Escape + `ESCAPE`.
-- [ ] **Grouping queries load whole track table into memory** — `TrackRepository.swift:223-315`. Push `GROUP BY` to SQL or stream with a cursor.
-- [ ] **`PlaylistsView.swift:78`** force-unwraps `playlist.id!`. Use optional mapping.
-- [ ] **`removeFromQueue` offset arithmetic fragile** — `PlayerViewModel.swift:246`; `currentIndex` may shift mid-loop on multi-select removal. *(Confidence-dependent — verify against `PlaybackQueue.remove`.)*
+- [x] **Grouping queries load whole track table into memory** — `TrackRepository.swift:223-315`. Push `GROUP BY` to SQL or stream with a cursor.
+- [x] **`PlaylistsView.swift:78`** force-unwraps `playlist.id!`. Use optional mapping.
+- [x] **`removeFromQueue` offset arithmetic fragile** — `PlayerViewModel.swift:246`; `currentIndex` may shift mid-loop on multi-select removal. *(Confidence-dependent — verify against `PlaybackQueue.remove`.)*
 
 ---
 
@@ -57,6 +57,16 @@ Whole-codebase review (app + `LinnetLibrary`, `LinnetAudio`, `LinnetAI`). Items 
 - AI: coalesced model load (reentrancy), path-traversal sanitization + containment, batch error/cancellation callbacks.
 - UI: cancellable `loadAndPlay`, per-card click state, deleted dead `DetailPage.swift` (regenerated Xcode project).
 
-**Remaining (10 items):** the larger/riskier refactors — N+1 import, FTS5 search fix (newly found), artwork FK cleanup, `copyDatabase` via GRDB backup, grouping-query memory, `DatabaseLocation.url` throwing, engine-start/route-change recovery, stale-cache-on-edit, dead shuffle/repeat + download progress, `PlaylistsView` force-unwrap, `removeFromQueue` arithmetic. Each is self-contained and can be its own focused change.
+## Progress — session 2
+
+**Done (remaining 10 items).** Verified by `swift build`/`swift test` per package and a full `xcodebuild` (BUILD SUCCEEDED).
+- FTS5 search fixed via `track.id IN (SELECT rowid FROM trackFts WHERE ... MATCH ?)` subquery; the previously-failing `FTS5 search by title` test now passes; removed the broken `baseFTSSQL`.
+- `PlaylistsView` optional-maps `playlist.id`; `removeFromQueue` hardened so `queue`/`queuedTracks` can't desync (arithmetic was verified correct).
+- Stale-cache views key `onChange` on `tracks` (Equatable) instead of `tracks.count`.
+- Shuffle/repeat buttons wired (added `PlaybackQueue.setUpcoming` + `PlayerViewModel.shuffleQueue` keeping both arrays in sync; repointed the Shuffle command); model download progress now reported via an actor-isolated callback.
+- `AudioPlayer` surfaces engine-start errors via `onError` and recovers from `AVAudioEngineConfigurationChange` (route changes), with a playback-intent flag.
+- Import dedup pre-filters in memory (no per-track `COUNT`, handles within-run dups); artwork orphan cleanup on album/artist delete + `deleteOrphaned` + catch-all `ArtworkRepository.deleteOrphaned()` (+2 tests); `copyDatabase` uses GRDB `backup(to:)`; grouping queries stream via cursor.
+
+**Deferred:** `DatabaseLocation.url` throwing (folded into the ArtworkService item) — left as `try?` since making `url` throwing touches many call sites; revisit if directory-creation failures need to surface.
 
 _Generated from a parallel multi-agent code review. Critical items verified against source; confidence-dependent items flagged inline._

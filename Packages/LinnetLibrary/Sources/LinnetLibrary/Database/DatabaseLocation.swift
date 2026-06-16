@@ -1,4 +1,5 @@
 import Foundation
+import GRDB
 
 /// Where the Linnet database file is stored.
 public enum DatabaseLocation: Sendable {
@@ -78,23 +79,21 @@ public enum DatabaseLocation: Sendable {
         guard srcURL != dstURL else { return }
 
         let fm = FileManager.default
-        // Remove existing destination if present
-        if fm.fileExists(atPath: dstURL.path) {
-            try fm.removeItem(at: dstURL)
-        }
-        try fm.copyItem(at: srcURL, to: dstURL)
-
-        // Also copy WAL and SHM if they exist
-        for suffix in ["-wal", "-shm"] {
-            let srcJournal = URL(filePath: srcURL.path + suffix)
-            let dstJournal = URL(filePath: dstURL.path + suffix)
-            if fm.fileExists(atPath: srcJournal.path) {
-                if fm.fileExists(atPath: dstJournal.path) {
-                    try fm.removeItem(at: dstJournal)
-                }
-                try fm.copyItem(at: srcJournal, to: dstJournal)
+        // Clear the destination (and any stale journals) so the backup starts clean.
+        for url in [dstURL, URL(filePath: dstURL.path + "-wal"), URL(filePath: dstURL.path + "-shm")] {
+            if fm.fileExists(atPath: url.path) {
+                try fm.removeItem(at: url)
             }
         }
+
+        // Use SQLite's online backup so the copy is transactionally consistent even
+        // if the source is being written — copying the raw .db/-wal/-shm files while
+        // the pool is open can capture a mid-write state and corrupt the copy.
+        var sourceConfig = Configuration()
+        sourceConfig.readonly = true
+        let sourceDB = try DatabaseQueue(path: srcURL.path, configuration: sourceConfig)
+        let destDB = try DatabaseQueue(path: dstURL.path)
+        try sourceDB.backup(to: destDB)
     }
 
     /// Human-readable description of the location.

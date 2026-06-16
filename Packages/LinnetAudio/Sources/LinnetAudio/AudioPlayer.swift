@@ -20,6 +20,13 @@ public final class AudioPlayer: @unchecked Sendable {
     private var _playbackGeneration: UInt64 = 0
 
     public var onTrackFinished: (@Sendable () -> Void)?
+    /// Surfaces non-throwing engine failures (e.g. a failed restart) to the caller.
+    public var onError: (@Sendable (Error) -> Void)?
+
+    /// Whether playback should be active, so we can resume after the audio engine
+    /// is stopped by a hardware route/configuration change.
+    private var shouldBePlaying = false
+    private var configChangeObserver: NSObjectProtocol?
 
     public var crossfadeEnabled: Bool {
         get { scheduler.crossfadeManager.isEnabled }
@@ -52,6 +59,46 @@ public final class AudioPlayer: @unchecked Sendable {
 
         // Bind equalizer to the AVAudioUnitEQ node
         equalizer.bind(to: eqNode)
+
+        // The engine stops itself when the hardware route changes (headphones
+        // unplugged, output device switched, etc.). Reconnect and resume.
+        configChangeObserver = NotificationCenter.default.addObserver(
+            forName: .AVAudioEngineConfigurationChange,
+            object: engine,
+            queue: nil
+        ) { [weak self] _ in
+            self?.handleConfigurationChange()
+        }
+    }
+
+    deinit {
+        if let configChangeObserver {
+            NotificationCenter.default.removeObserver(configChangeObserver)
+        }
+    }
+
+    private func handleConfigurationChange() {
+        guard let file = currentFile else { return }
+        // Reconnect the graph for the current file's format and restart if we
+        // were playing — otherwise audio silently stays dead after the change.
+        let format = file.processingFormat
+        let activeNode = scheduler.activeNode
+        engine.disconnectNodeOutput(activeNode)
+        engine.disconnectNodeOutput(eqNode)
+        engine.connect(activeNode, to: eqNode, format: format)
+        engine.connect(eqNode, to: engine.mainMixerNode, format: format)
+        engine.prepare()
+
+        guard shouldBePlaying else { return }
+        if !engine.isRunning {
+            do {
+                try engine.start()
+            } catch {
+                onError?(error)
+                return
+            }
+        }
+        activeNode.play()
     }
 
     // MARK: - Playback generation
@@ -146,17 +193,25 @@ public final class AudioPlayer: @unchecked Sendable {
     }
 
     public func play() {
+        shouldBePlaying = true
         if !engine.isRunning {
-            try? engine.start()
+            do {
+                try engine.start()
+            } catch {
+                onError?(error)
+                return
+            }
         }
         scheduler.activeNode.play()
     }
 
     public func pause() {
+        shouldBePlaying = false
         scheduler.activeNode.pause()
     }
 
     public func stop() {
+        shouldBePlaying = false
         // Invalidate the in-flight callback that stopping the node fires.
         let generation = nextGeneration()
         scheduler.activeNode.stop()

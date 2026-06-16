@@ -118,7 +118,7 @@ struct SongsGroupingView: View {
                 observation: makeObservation()
             )
         }
-        .onChange(of: tracks.count) {
+        .onChange(of: tracks) {
             if searchText.isEmpty {
                 _songsCache = observer?.value
             }

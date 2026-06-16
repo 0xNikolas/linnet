@@ -38,6 +38,7 @@ public struct ArtistRepository: Sendable {
 
     public func delete(id: Int64) throws {
         try pool.write { db in
+            try db.execute(sql: "DELETE FROM artwork WHERE ownerType = 'artist' AND ownerId = ?", arguments: [id])
             _ = try ArtistRecord.deleteOne(db, id: id)
         }
     }
@@ -129,7 +130,9 @@ public struct ArtistRepository: Sendable {
                 DELETE FROM artist
                 WHERE id NOT IN (SELECT DISTINCT artistId FROM track WHERE artistId IS NOT NULL)
                 """)
-            return db.changesCount
+            let deleted = db.changesCount
+            try db.execute(sql: "DELETE FROM artwork WHERE ownerType = 'artist' AND ownerId NOT IN (SELECT id FROM artist)")
+            return deleted
         }
     }
 }

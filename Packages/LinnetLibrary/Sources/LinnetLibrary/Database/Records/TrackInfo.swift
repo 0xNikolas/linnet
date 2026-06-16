@@ -46,16 +46,4 @@ public struct TrackInfo: Codable, Sendable, Hashable, Identifiable, FetchableRec
         LEFT JOIN artist ON track.artistId = artist.id
         LEFT JOIN album ON track.albumId = album.id
         """
-
-    /// Base SQL with FTS join for search queries.
-    public static let baseFTSSQL = """
-        SELECT DISTINCT
-            track.*,
-            artist.name AS artistName,
-            album.name AS albumName
-        FROM track
-        LEFT JOIN artist ON track.artistId = artist.id
-        LEFT JOIN album ON track.albumId = album.id
-        LEFT JOIN trackFts ON trackFts.rowid = track.id
-        """
 }

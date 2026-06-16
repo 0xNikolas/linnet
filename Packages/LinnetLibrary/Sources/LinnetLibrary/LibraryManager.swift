@@ -38,42 +38,54 @@ public actor LibraryManager {
     /// Processes in chunks of 500 to avoid locking the database for too long.
     /// Returns the number of newly imported tracks.
     public func importResults(_ results: [ScanResult], into pool: DatabasePool, chunkSize: Int = 500) throws -> Int {
-        // Pre-fetch existing file paths once before batching
-        let existingPaths = try pool.read { db in
+        // Build dedup indexes once: existing file paths, and a content index of
+        // (title, artist) -> durations for near-duplicate detection.
+        var seenPaths = try pool.read { db in
             try Set(String.fetchAll(db, sql: "SELECT filePath FROM track"))
+        }
+        var contentIndex: [String: [Double]] = try pool.read { db in
+            var index: [String: [Double]] = [:]
+            let rows = try Row.fetchAll(db, sql: """
+                SELECT track.title AS t, COALESCE(artist.name, '') AS a, track.duration AS d
+                FROM track LEFT JOIN artist ON track.artistId = artist.id
+                """)
+            for row in rows {
+                let title: String = row["t"] ?? ""
+                let artist: String = row["a"] ?? ""
+                let duration: Double = row["d"] ?? 0
+                index[Self.contentKey(title: title, artist: artist), default: []].append(duration)
+            }
+            return index
+        }
+
+        // Pre-filter duplicates (by path and by near-identical content), including
+        // duplicates within this same import run — in memory, no per-track queries.
+        var toImport: [ScanResult] = []
+        for result in results {
+            let path = result.filePath
+            if seenPaths.contains(path) { continue }
+            let title = result.metadata.title ?? URL(filePath: path).deletingPathExtension().lastPathComponent
+            let dur = result.metadata.duration
+            let key = Self.contentKey(title: title, artist: result.metadata.artist ?? "")
+            if let durations = contentIndex[key], durations.contains(where: { abs($0 - dur) <= 3.0 }) {
+                continue
+            }
+            toImport.append(result)
+            seenPaths.insert(path)
+            contentIndex[key, default: []].append(dur)
         }
 
         var totalImported = 0
 
-        for chunk in results.chunked(into: chunkSize) {
+        for chunk in toImport.chunked(into: chunkSize) {
             let chunkCount = try pool.write { db in
                 var importedCount = 0
 
                 for result in chunk {
                     let path = result.filePath
-                    if existingPaths.contains(path) { continue }
-
                     let metadata = result.metadata
                     let title = metadata.title ?? URL(filePath: path).deletingPathExtension().lastPathComponent
                     let dur = metadata.duration
-
-                    // Check for duplicate content (same title + artist + similar duration)
-                    if let artistName = metadata.artist {
-                        let dupCount = try Int.fetchOne(db, sql: """
-                            SELECT COUNT(*) FROM track
-                            JOIN artist ON track.artistId = artist.id
-                            WHERE track.title = ? AND artist.name = ?
-                            AND track.duration BETWEEN ? AND ?
-                            """, arguments: [title, artistName, dur - 3.0, dur + 3.0]) ?? 0
-                        if dupCount > 0 { continue }
-                    } else {
-                        let dupCount = try Int.fetchOne(db, sql: """
-                            SELECT COUNT(*) FROM track
-                            WHERE title = ? AND artistId IS NULL
-                            AND duration BETWEEN ? AND ?
-                            """, arguments: [title, dur - 3.0, dur + 3.0]) ?? 0
-                        if dupCount > 0 { continue }
-                    }
 
                     // Find or create artist
                     var artistId: Int64?
@@ -163,6 +175,11 @@ public actor LibraryManager {
         }
 
         return totalImported
+    }
+
+    /// Key for near-duplicate content detection: exact title + artist (empty for none).
+    private static func contentKey(title: String, artist: String) -> String {
+        "\(title)\u{1}\(artist)"
     }
 }
 

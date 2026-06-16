@@ -54,7 +54,7 @@ struct NowPlayingExpandedView: View {
 
             // Controls
             HStack(spacing: 32) {
-                Button(action: {}) {
+                Button(action: { player.shuffleQueue() }) {
                     Image(systemName: "shuffle")
                         .font(.app(size: 16))
                 }
@@ -79,12 +79,12 @@ struct NowPlayingExpandedView: View {
                 }
                 .buttonStyle(.plain)
 
-                Button(action: {}) {
-                    Image(systemName: "repeat")
+                Button(action: { player.toggleRepeatMode() }) {
+                    Image(systemName: player.repeatMode == .one ? "repeat.1" : "repeat")
                         .font(.app(size: 16))
                 }
                 .buttonStyle(.plain)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(player.repeatMode == .off ? .secondary : .primary)
             }
 
             // Volume

@@ -75,7 +75,7 @@ struct PlaylistsView: View {
                             VStack(alignment: .leading) {
                                 Text(playlist.name)
                                     .font(.app(size: 14))
-                                Text("\(entryCounts[playlist.id!] ?? 0) songs")
+                                Text("\(playlist.id.flatMap { entryCounts[$0] } ?? 0) songs")
                                     .font(.app(size: 12))
                                     .foregroundStyle(.secondary)
                             }

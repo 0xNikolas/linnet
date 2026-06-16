@@ -38,6 +38,18 @@ public struct ArtworkRepository: Sendable {
         }
     }
 
+    /// Deletes artwork rows whose owner (album/artist/track) no longer exists.
+    /// The artwork table has no real foreign key, so orphans must be swept.
+    @discardableResult
+    public func deleteOrphaned() throws -> Int {
+        try pool.write { db in
+            try db.execute(sql: "DELETE FROM artwork WHERE ownerType = 'album'  AND ownerId NOT IN (SELECT id FROM album)")
+            try db.execute(sql: "DELETE FROM artwork WHERE ownerType = 'artist' AND ownerId NOT IN (SELECT id FROM artist)")
+            try db.execute(sql: "DELETE FROM artwork WHERE ownerType = 'track'  AND ownerId NOT IN (SELECT id FROM track)")
+            return db.changesCount
+        }
+    }
+
     // MARK: - Queries
 
     public func fetchThumbnail(ownerType: String, ownerId: Int64) throws -> Data? {

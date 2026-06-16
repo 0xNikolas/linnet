@@ -82,6 +82,10 @@ public actor ModelManager {
         }
     }
 
+    private func setDownloadProgress(_ model: AIModelType, _ fraction: Double) {
+        modelStatuses[model] = .downloading(progress: fraction)
+    }
+
     public func status(for model: AIModelType) -> ModelStatus {
         modelStatuses[model] ?? .notDownloaded
     }
@@ -111,12 +115,9 @@ public actor ModelManager {
         let repo = Hub.Repo(id: model.huggingFaceModelID)
 
         do {
-            let localURL = try await hubApi.snapshot(from: repo) { progress in
-                Task { @MainActor in
-                    // Update progress on next actor hop
-                }
-                // We capture progress but can't easily call back into the actor from here.
-                // The progress is reported through the Hub's own Progress object.
+            let localURL = try await hubApi.snapshot(from: repo) { [weak self] progress in
+                let fraction = progress.fractionCompleted
+                Task { await self?.setDownloadProgress(model, fraction) }
             }
 
             // Create a symlink or marker in our models directory pointing to the Hub cache

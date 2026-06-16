@@ -85,6 +85,12 @@ public final class PlayerViewModel {
         audioPlayer.onTrackFinished = { [weak self] in
             Task { @MainActor in self?.next() }
         }
+        audioPlayer.onError = { [weak self] error in
+            Task { @MainActor in
+                self?.errorMessage = error.localizedDescription
+                Log.player.error("Audio engine error: \(error)")
+            }
+        }
     }
 
     func setCrossfadeEnabled(_ enabled: Bool) {
@@ -247,13 +253,26 @@ public final class PlayerViewModel {
     }
 
     func removeFromQueue(at offsets: IndexSet) {
-        for offset in offsets.sorted().reversed() {
-            let trackIndex = queue.currentIndex + 1 + offset
+        // `offset` indexes the upcoming tracks (0 = first after the current one).
+        // Removing upcoming tracks never shifts currentIndex, and descending order
+        // keeps lower offsets valid. Guard both removals together so `queue` and
+        // `queuedTracks` (parallel arrays) can't desync.
+        let upcomingCount = max(0, queuedTracks.count - (queue.currentIndex + 1))
+        for offset in offsets.sorted().reversed() where offset < upcomingCount {
             queue.remove(at: offset)
-            if trackIndex < queuedTracks.count {
-                queuedTracks.remove(at: trackIndex)
-            }
+            queuedTracks.remove(at: queue.currentIndex + 1 + offset)
         }
+    }
+
+    /// Shuffle the upcoming tracks, keeping `queue` and `queuedTracks` (parallel
+    /// arrays) in the same order so playback and displayed metadata stay aligned.
+    func shuffleQueue() {
+        let start = queue.currentIndex + 1
+        guard start < queuedTracks.count else { return }
+        var upcoming = Array(queuedTracks[start...])
+        upcoming.shuffle()
+        queuedTracks.replaceSubrange(start..., with: upcoming)
+        queue.setUpcoming(upcoming.map(\.filePath))
     }
 
     func moveInQueue(from source: IndexSet, to destination: Int) {

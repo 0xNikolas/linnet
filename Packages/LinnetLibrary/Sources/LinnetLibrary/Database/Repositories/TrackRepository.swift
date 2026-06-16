@@ -177,8 +177,8 @@ public struct TrackRepository: Sendable {
 
             if let ftsQuery = sanitizedFTSQuery(query) {
                 let sql = """
-                    \(TrackInfo.baseFTSSQL)
-                    WHERE trackFts MATCH ?
+                    \(TrackInfo.baseSQL)
+                    WHERE track.id IN (SELECT rowid FROM trackFts WHERE trackFts MATCH ?)
                        OR track.title LIKE ?
                        OR artist.name LIKE ?
                        OR album.name LIKE ?
@@ -209,8 +209,8 @@ public struct TrackRepository: Sendable {
         let likePattern = "%\(query)%"
         if let ftsQuery = sanitizedFTSQuery(query) {
             let sql = """
-                \(TrackInfo.baseFTSSQL)
-                WHERE trackFts MATCH ? OR track.title LIKE ? OR artist.name LIKE ? OR album.name LIKE ?
+                \(TrackInfo.baseSQL)
+                WHERE track.id IN (SELECT rowid FROM trackFts WHERE trackFts MATCH ?) OR track.title LIKE ? OR artist.name LIKE ? OR album.name LIKE ?
                 """
             return (sql: sql, arguments: [ftsQuery, likePattern, likePattern, likePattern])
         } else {
@@ -224,96 +224,66 @@ public struct TrackRepository: Sendable {
 
     public func fetchInfoGroupedByArtist(searchQuery: String? = nil) throws -> [(sectionName: String, tracks: [TrackInfo])] {
         try pool.read { [self] db in
-            let (sql, arguments) = searchSQL(searchQuery: searchQuery)
-            let fullSQL = sql + " ORDER BY COALESCE(artist.name, 'Unknown Artist') COLLATE NOCASE, track.title COLLATE NOCASE"
-
-            let tracks = try TrackInfo.fetchAll(db, sql: fullSQL, arguments: StatementArguments(arguments))
-
-            var sections: [(sectionName: String, tracks: [TrackInfo])] = []
-            var currentKey = ""
-            var currentTracks: [TrackInfo] = []
-
-            for track in tracks {
-                let key = track.artistName ?? "Unknown Artist"
-                if key != currentKey {
-                    if !currentTracks.isEmpty {
-                        sections.append((sectionName: currentKey, tracks: currentTracks))
-                    }
-                    currentKey = key
-                    currentTracks = [track]
-                } else {
-                    currentTracks.append(track)
-                }
-            }
-            if !currentTracks.isEmpty {
-                sections.append((sectionName: currentKey, tracks: currentTracks))
-            }
-
-            return sections
+            try groupedSections(
+                db: db,
+                orderBy: "COALESCE(artist.name, 'Unknown Artist') COLLATE NOCASE, track.title COLLATE NOCASE",
+                searchQuery: searchQuery
+            ) { $0.artistName ?? "Unknown Artist" }
         }
     }
 
     public func fetchInfoGroupedByAlbum(searchQuery: String? = nil) throws -> [(sectionName: String, tracks: [TrackInfo])] {
         try pool.read { [self] db in
-            let (sql, arguments) = searchSQL(searchQuery: searchQuery)
-            let fullSQL = sql + " ORDER BY COALESCE(album.name, 'Unknown Album') COLLATE NOCASE, track.title COLLATE NOCASE"
-
-            let tracks = try TrackInfo.fetchAll(db, sql: fullSQL, arguments: StatementArguments(arguments))
-
-            var sections: [(sectionName: String, tracks: [TrackInfo])] = []
-            var currentKey = ""
-            var currentTracks: [TrackInfo] = []
-
-            for track in tracks {
-                let key = track.albumName ?? "Unknown Album"
-                if key != currentKey {
-                    if !currentTracks.isEmpty {
-                        sections.append((sectionName: currentKey, tracks: currentTracks))
-                    }
-                    currentKey = key
-                    currentTracks = [track]
-                } else {
-                    currentTracks.append(track)
-                }
-            }
-            if !currentTracks.isEmpty {
-                sections.append((sectionName: currentKey, tracks: currentTracks))
-            }
-
-            return sections
+            try groupedSections(
+                db: db,
+                orderBy: "COALESCE(album.name, 'Unknown Album') COLLATE NOCASE, track.title COLLATE NOCASE",
+                searchQuery: searchQuery
+            ) { $0.albumName ?? "Unknown Album" }
         }
     }
 
     public func fetchInfoGroupedByFolder(searchQuery: String? = nil) throws -> [(sectionName: String, tracks: [TrackInfo])] {
         try pool.read { [self] db in
-            let (sql, arguments) = searchSQL(searchQuery: searchQuery)
-            let fullSQL = sql + " ORDER BY track.filePath COLLATE NOCASE"
-
-            let tracks = try TrackInfo.fetchAll(db, sql: fullSQL, arguments: StatementArguments(arguments))
-
-            var sections: [(sectionName: String, tracks: [TrackInfo])] = []
-            var currentKey = ""
-            var currentTracks: [TrackInfo] = []
-
-            for track in tracks {
-                let url = URL(fileURLWithPath: track.filePath)
-                let key = url.deletingLastPathComponent().path
-                if key != currentKey {
-                    if !currentTracks.isEmpty {
-                        sections.append((sectionName: currentKey, tracks: currentTracks))
-                    }
-                    currentKey = key
-                    currentTracks = [track]
-                } else {
-                    currentTracks.append(track)
-                }
-            }
-            if !currentTracks.isEmpty {
-                sections.append((sectionName: currentKey, tracks: currentTracks))
-            }
-
-            return sections
+            try groupedSections(
+                db: db,
+                orderBy: "track.filePath COLLATE NOCASE",
+                searchQuery: searchQuery
+            ) { URL(fileURLWithPath: $0.filePath).deletingLastPathComponent().path }
         }
+    }
+
+    /// Streams ordered rows with a cursor and groups them into contiguous sections,
+    /// avoiding a second full-table array alongside the section arrays.
+    private func groupedSections(
+        db: Database,
+        orderBy: String,
+        searchQuery: String?,
+        key: (TrackInfo) -> String
+    ) throws -> [(sectionName: String, tracks: [TrackInfo])] {
+        let (sql, arguments) = searchSQL(searchQuery: searchQuery)
+        let cursor = try TrackInfo.fetchCursor(db, sql: sql + " ORDER BY " + orderBy, arguments: StatementArguments(arguments))
+
+        var sections: [(sectionName: String, tracks: [TrackInfo])] = []
+        var currentKey: String?
+        var currentTracks: [TrackInfo] = []
+
+        while let track = try cursor.next() {
+            let k = key(track)
+            if k != currentKey {
+                if let currentKey, !currentTracks.isEmpty {
+                    sections.append((sectionName: currentKey, tracks: currentTracks))
+                }
+                currentKey = k
+                currentTracks = [track]
+            } else {
+                currentTracks.append(track)
+            }
+        }
+        if let currentKey, !currentTracks.isEmpty {
+            sections.append((sectionName: currentKey, tracks: currentTracks))
+        }
+
+        return sections
     }
 
     // MARK: - Metadata updates
