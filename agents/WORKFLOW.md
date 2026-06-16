@@ -3,6 +3,7 @@
 ## Planning & Execution
 
 - **Always work using plans** — save to `agents/plans/`
+- **Code review findings & tracking checklists go in `agents/checklists/`** — not `agents/plans/`, `docs/`, or the repo root
 - If requirements aren't clear, **ask questions first**
 - Once the task is clear, **create a plan** and present it
 - After user gives the go-ahead, **execute all tasks in the plan without further questions**
