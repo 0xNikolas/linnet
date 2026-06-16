@@ -217,6 +217,29 @@ struct DatabaseTests {
         #expect(results[0].title == "Paranoid Android")
     }
 
+    @Test("Search matches title (FTS), artist, and album via the shared condition")
+    func searchAcrossFields() throws {
+        let db = try makeDB()
+        var artist = ArtistRecord(name: "Boards of Canada")
+        try db.artists.insert(&artist)
+        var album = AlbumRecord(name: "Geogaddi", artistId: artist.id)
+        try db.albums.insert(&album)
+        var track = TrackRecord(filePath: "/m.mp3", title: "Music Is Math", duration: 312, trackNumber: 1, albumId: album.id, artistId: artist.id)
+        try db.tracks.insert(&track)
+
+        // FTS path (title token) — this is the query shape that previously crashed in the views.
+        #expect(try db.tracks.searchAllInfo(query: "math").count == 1)
+        // LIKE fallbacks on joined artist/album names.
+        #expect(try db.tracks.searchAllInfo(query: "boards").first?.artistName == "Boards of Canada")
+        #expect(try db.tracks.searchAllInfo(query: "geogaddi").first?.albumName == "Geogaddi")
+        #expect(try db.tracks.searchAllInfo(query: "nomatch").isEmpty)
+
+        // Grouped + search composes the condition with the section ordering without erroring.
+        let grouped = try db.tracks.fetchInfoGroupedByArtist(searchQuery: "math")
+        #expect(grouped.count == 1)
+        #expect(grouped[0].sectionName == "Boards of Canada")
+    }
+
     // MARK: - Playlist Repository
 
     @Test("Create playlist and add tracks")

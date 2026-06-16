@@ -3,10 +3,10 @@ import GRDB
 
 public enum ArtistSortColumn: String, Sendable {
     case name, albumCount
-    public var sql: String {
+    public var sql: SortSQL {
         switch self {
-        case .name: "artist.name COLLATE NOCASE"
-        case .albumCount: "albumCount"
+        case .name: SortSQL("artist.name COLLATE NOCASE")
+        case .albumCount: SortSQL("albumCount")
         }
     }
 }

@@ -10,13 +10,13 @@ public enum SortDirection: String, Sendable, CaseIterable {
 
 public enum TrackSortColumn: String, Sendable {
     case title, artist, album, dateAdded, duration
-    public var sql: String {
+    public var sql: SortSQL {
         switch self {
-        case .title: "track.title COLLATE NOCASE"
-        case .artist: "COALESCE(artist.name, 'zzz') COLLATE NOCASE"
-        case .album: "COALESCE(album.name, 'zzz') COLLATE NOCASE"
-        case .dateAdded: "track.dateAdded"
-        case .duration: "track.duration"
+        case .title: SortSQL("track.title COLLATE NOCASE")
+        case .artist: SortSQL("COALESCE(artist.name, 'zzz') COLLATE NOCASE")
+        case .album: SortSQL("COALESCE(album.name, 'zzz') COLLATE NOCASE")
+        case .dateAdded: SortSQL("track.dateAdded")
+        case .duration: SortSQL("track.duration")
         }
     }
 }
@@ -153,18 +153,6 @@ public struct TrackRepository: Sendable {
         }
     }
 
-    // MARK: - FTS5 helpers
-
-    /// Sanitize a user query for FTS5 MATCH. Returns nil if the query can't be safely used.
-    private func sanitizedFTSQuery(_ query: String) -> String? {
-        let tokens = query
-            .components(separatedBy: .whitespaces)
-            .map { $0.filter { $0.isLetter || $0.isNumber } }
-            .filter { !$0.isEmpty }
-        guard !tokens.isEmpty else { return nil }
-        return tokens.map { "\"\($0)\"*" }.joined(separator: " ")
-    }
-
     // MARK: - Full-text + LIKE search
 
     public func search(query: String, limit: Int = 50) throws -> [TrackInfo] {
@@ -173,53 +161,21 @@ public struct TrackRepository: Sendable {
 
     public func searchAllInfo(query: String, limit: Int = 200) throws -> [TrackInfo] {
         try pool.read { db in
-            let likePattern = "%\(query)%"
-
-            if let ftsQuery = sanitizedFTSQuery(query) {
-                let sql = """
-                    \(TrackInfo.baseSQL)
-                    WHERE track.id IN (SELECT rowid FROM trackFts WHERE trackFts MATCH ?)
-                       OR track.title LIKE ?
-                       OR artist.name LIKE ?
-                       OR album.name LIKE ?
-                    ORDER BY track.title COLLATE NOCASE
-                    LIMIT ?
-                    """
-                return try TrackInfo.fetchAll(db, sql: sql, arguments: [ftsQuery, likePattern, likePattern, likePattern, limit])
-            } else {
-                let sql = """
-                    \(TrackInfo.baseSQL)
-                    WHERE track.title LIKE ?
-                       OR artist.name LIKE ?
-                       OR album.name LIKE ?
-                    ORDER BY track.title COLLATE NOCASE
-                    LIMIT ?
-                    """
-                return try TrackInfo.fetchAll(db, sql: sql, arguments: [likePattern, likePattern, likePattern, limit])
-            }
+            var (sql, arguments) = searchSQL(searchQuery: query)
+            sql += " ORDER BY track.title COLLATE NOCASE LIMIT ?"
+            arguments.append(limit)
+            return try TrackInfo.fetchAll(db, sql: sql, arguments: StatementArguments(arguments))
         }
     }
 
     // MARK: - Grouped queries with optional search
 
+    /// `TrackInfo.baseSQL` plus an optional search `WHERE` clause. Append ORDER BY/LIMIT as needed.
     private func searchSQL(searchQuery: String?) -> (sql: String, arguments: [any DatabaseValueConvertible]) {
-        guard let query = searchQuery, !query.isEmpty else {
+        guard let match = TrackSearch.condition(for: searchQuery) else {
             return (sql: TrackInfo.baseSQL, arguments: [])
         }
-        let likePattern = "%\(query)%"
-        if let ftsQuery = sanitizedFTSQuery(query) {
-            let sql = """
-                \(TrackInfo.baseSQL)
-                WHERE track.id IN (SELECT rowid FROM trackFts WHERE trackFts MATCH ?) OR track.title LIKE ? OR artist.name LIKE ? OR album.name LIKE ?
-                """
-            return (sql: sql, arguments: [ftsQuery, likePattern, likePattern, likePattern])
-        } else {
-            let sql = """
-                \(TrackInfo.baseSQL)
-                WHERE track.title LIKE ? OR artist.name LIKE ? OR album.name LIKE ?
-                """
-            return (sql: sql, arguments: [likePattern, likePattern, likePattern])
-        }
+        return (sql: TrackInfo.baseSQL + " WHERE " + match.sql, arguments: match.arguments)
     }
 
     public func fetchInfoGroupedByArtist(searchQuery: String? = nil) throws -> [(sectionName: String, tracks: [TrackInfo])] {
