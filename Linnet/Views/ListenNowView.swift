@@ -94,8 +94,8 @@ struct ListenNowView: View {
                                 .font(.app(size: 13))
                                 .foregroundStyle(.tertiary)
                                 .multilineTextAlignment(.center)
-                            Button("Open Settings...") {
-                                NotificationCenter.default.post(name: .openSettings, object: nil)
+                            SettingsLink {
+                                Text("Open Settings...")
                             }
                             .buttonStyle(.bordered)
                             .controlSize(.small)

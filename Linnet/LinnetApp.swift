@@ -91,6 +91,8 @@ struct LinnetApp: App {
 
         Settings {
             SettingsView()
+                .environment(playerViewModel)
+                .environment(artworkService)
                 .environment(\.appDatabase, appDatabase)
         }
     }

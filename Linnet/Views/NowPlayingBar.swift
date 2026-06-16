@@ -5,7 +5,6 @@ extension Notification.Name {
     static let navigateToCurrentArtist = Notification.Name("navigateToCurrentArtist")
     static let highlightTrackInDetail = Notification.Name("highlightTrackInDetail")
     static let focusSearch = Notification.Name("focusSearch")
-    static let openSettings = Notification.Name("openSettings")
     static let toggleQueueSidePane = Notification.Name("toggleQueueSidePane")
     static let registerBreadcrumb = Notification.Name("registerBreadcrumb")
     static let navigateToArtist = Notification.Name("navigateToArtist")
