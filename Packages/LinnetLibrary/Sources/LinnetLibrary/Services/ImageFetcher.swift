@@ -24,7 +24,7 @@ public struct ImageFetcher: Sendable {
             }
             return data
         } catch {
-            print("[ImageFetcher] Cover Art Archive error for \(releaseGroupMBID): \(error.localizedDescription)")
+            LibraryLog.network.error("Cover Art Archive error for \(releaseGroupMBID): \(error.localizedDescription)")
             return nil
         }
     }
@@ -66,7 +66,7 @@ public struct ImageFetcher: Sendable {
             let response = try JSONDecoder().decode(WikidataResponse.self, from: data)
             return response.entities[entityID]?.sitelinks?["enwiki"]?.title
         } catch {
-            print("[ImageFetcher] Wikidata resolve error for \(entityID): \(error.localizedDescription)")
+            LibraryLog.network.error("Wikidata resolve error for \(entityID): \(error.localizedDescription)")
             return nil
         }
     }
@@ -103,7 +103,7 @@ public struct ImageFetcher: Sendable {
             }
             return imageData
         } catch {
-            print("[ImageFetcher] Wikipedia image error for \(title): \(error.localizedDescription)")
+            LibraryLog.network.error("Wikipedia image error for \(title): \(error.localizedDescription)")
             return nil
         }
     }

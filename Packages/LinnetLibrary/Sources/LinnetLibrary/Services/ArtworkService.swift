@@ -65,7 +65,7 @@ public final class ArtworkService {
                 thumbnailData: nil
             )
         } catch {
-            print("ArtworkService: failed to store album artwork for \(albumId): \(error)")
+            LibraryLog.artwork.error("Failed to store album artwork for \(albumId): \(error)")
             return false
         }
         return true
@@ -112,7 +112,7 @@ public final class ArtworkService {
                 thumbnailData: nil
             )
         } catch {
-            print("ArtworkService: failed to store artist artwork for \(artistId): \(error)")
+            LibraryLog.artwork.error("Failed to store artist artwork for \(artistId): \(error)")
             return false
         }
         return true
