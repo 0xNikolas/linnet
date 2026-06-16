@@ -37,17 +37,6 @@ private struct SongsData: Sendable {
 // File-level cache -- survives SwiftUI view lifecycle
 private nonisolated(unsafe) var _songsCache: SongsData?
 
-// MARK: - FTS5 helper (mirrors TrackRepository)
-
-private func sanitizedFTSQuery(_ query: String) -> String? {
-    let tokens = query
-        .components(separatedBy: .whitespaces)
-        .map { $0.filter { $0.isLetter || $0.isNumber } }
-        .filter { !$0.isEmpty }
-    guard !tokens.isEmpty else { return nil }
-    return tokens.map { "\"\($0)\"*" }.joined(separator: " ")
-}
-
 // MARK: - Wrapper View
 
 struct SongsGroupingView: View {
@@ -187,15 +176,14 @@ private func fetchSearchTracks(db: Database, query: String) throws -> [TrackInfo
     let likePattern = "%\(query)%"
     if let ftsQuery = sanitizedFTSQuery(query) {
         let sql = """
-            SELECT DISTINCT
+            SELECT
                 track.*,
                 artist.name AS artistName,
                 album.name AS albumName
             FROM track
             LEFT JOIN artist ON track.artistId = artist.id
             LEFT JOIN album ON track.albumId = album.id
-            LEFT JOIN trackFts ON trackFts.rowid = track.id
-            WHERE trackFts MATCH ?
+            WHERE track.id IN (SELECT rowid FROM trackFts WHERE trackFts MATCH ?)
                OR track.title LIKE ?
                OR artist.name LIKE ?
                OR album.name LIKE ?
@@ -228,8 +216,7 @@ private func appendSearchWhereClause(sql: inout String, arguments: inout [any Da
     if let ftsQuery = sanitizedFTSQuery(query) {
         sql += """
 
-            LEFT JOIN trackFts ON trackFts.rowid = track.id
-            WHERE trackFts MATCH ? OR track.title LIKE ? OR artist.name LIKE ? OR album.name LIKE ?
+            WHERE track.id IN (SELECT rowid FROM trackFts WHERE trackFts MATCH ?) OR track.title LIKE ? OR artist.name LIKE ? OR album.name LIKE ?
             """
         arguments = [ftsQuery, likePattern, likePattern, likePattern]
     } else {
