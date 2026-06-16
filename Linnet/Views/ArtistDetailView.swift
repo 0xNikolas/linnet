@@ -107,20 +107,21 @@ struct ArtistDetailView: View {
                             }
 
                             HStack(spacing: 12) {
-                                Button("Play") {
+                                Button {
                                     if let first = allTracks.first {
                                         player.playTrack(first, queue: allTracks, startingAt: 0)
                                     }
-                                }
+                                } label: { Label("Play", systemImage: "play.fill") }
                                 .buttonStyle(.borderedProminent)
+                                .tint(.accentColor)
                                 .disabled(allTracks.isEmpty)
 
-                                Button("Shuffle") {
+                                Button {
                                     let shuffled = allTracks.shuffled()
                                     if let first = shuffled.first {
                                         player.playTrack(first, queue: shuffled, startingAt: 0)
                                     }
-                                }
+                                } label: { Label("Shuffle", systemImage: "shuffle") }
                                 .buttonStyle(.bordered)
                                 .disabled(allTracks.isEmpty)
                             }
@@ -505,7 +506,10 @@ private struct ArtistTrackRow: View {
             Text("\(track.trackNumber)")
                 .font(.app(size: 12))
                 .foregroundStyle(.tertiary)
-                .frame(width: 30, alignment: .trailing)
+                .frame(width: 24, alignment: .trailing)
+                .padding(.trailing, 8)
+
+            ArtworkThumbnail(ownerType: "album", ownerId: track.albumId)
                 .padding(.trailing, 8)
 
             VStack(alignment: .leading, spacing: 1) {

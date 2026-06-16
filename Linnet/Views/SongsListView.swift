@@ -60,6 +60,14 @@ private func formatFileSize(_ bytes: Int64) -> String {
 struct SongsListView: View {
     let tracks: [TrackInfo]
     var sections: [TrackSection] = []
+    /// Initial sort order. Pass `[]` to preserve the supplied order (album track
+    /// numbers, playlist order); columns remain sortable by clicking their headers.
+    var initialSortOrder: [KeyPathComparator<TrackInfo>] = [KeyPathComparator(\TrackInfo.title)]
+    /// Destructive removal shown in the row context menu. Defaults to deleting the
+    /// track from the library; playlists override it to remove the entry instead.
+    var removeLabel: String = "Remove from Library"
+    var removeIcon: String = "trash"
+    var onRemove: ((Set<Int64>) -> Void)?
     @Binding var highlightedTrackID: Int64?
     @Environment(PlayerViewModel.self) private var player
     @Environment(\.appDatabase) private var appDatabase
@@ -71,6 +79,9 @@ struct SongsListView: View {
             SongsTableView(
                 tracks: tracks,
                 sections: sections,
+                initialSortOrder: initialSortOrder,
+                removeLabel: removeLabel,
+                removeIcon: removeIcon,
                 highlightedTrackID: $highlightedTrackID,
                 onPlay: { track, queue, index in
                     player.playTrack(track, queue: queue, startingAt: index)
@@ -81,7 +92,7 @@ struct SongsListView: View {
                 onPlayLater: { track in
                     player.addLater(track)
                 },
-                onRemove: { trackIDs in
+                onRemove: onRemove ?? { trackIDs in
                     removeTracks(ids: trackIDs)
                 }
             )
@@ -112,9 +123,35 @@ private struct SongsTableView: View {
     let onPlayNext: (TrackInfo) -> Void
     let onPlayLater: (TrackInfo) -> Void
     let onRemove: (Set<Int64>) -> Void
+    let removeLabel: String
+    let removeIcon: String
+
+    init(
+        tracks: [TrackInfo],
+        sections: [TrackSection],
+        initialSortOrder: [KeyPathComparator<TrackInfo>],
+        removeLabel: String,
+        removeIcon: String,
+        highlightedTrackID: Binding<Int64?>,
+        onPlay: @escaping (TrackInfo, [TrackInfo], Int) -> Void,
+        onPlayNext: @escaping (TrackInfo) -> Void,
+        onPlayLater: @escaping (TrackInfo) -> Void,
+        onRemove: @escaping (Set<Int64>) -> Void
+    ) {
+        self.tracks = tracks
+        self.sections = sections
+        self.removeLabel = removeLabel
+        self.removeIcon = removeIcon
+        self._highlightedTrackID = highlightedTrackID
+        self.onPlay = onPlay
+        self.onPlayNext = onPlayNext
+        self.onPlayLater = onPlayLater
+        self.onRemove = onRemove
+        self._sortOrder = State(initialValue: initialSortOrder)
+    }
 
     @State private var selectedTrackIDs: Set<Int64> = []
-    @State private var sortOrder = [KeyPathComparator(\TrackInfo.title)]
+    @State private var sortOrder: [KeyPathComparator<TrackInfo>]
     @State private var sortedTracks: [TrackInfo] = []
     @State private var sortedSections: [TrackSection] = []
     @SceneStorage("SongsTableConfig") private var columnCustomization: TableColumnCustomization<TrackInfo>
@@ -225,8 +262,9 @@ private struct SongsTableView: View {
         .width(min: 30, ideal: 40, max: 60)
         .customizationID("trackNumber")
 
-        TableColumn("Title", value: \.title) { track in
-            HStack(spacing: 4) {
+        TableColumn("Song", value: \.title) { track in
+            HStack(spacing: 8) {
+                ArtworkThumbnail(ownerType: "album", ownerId: track.albumId)
                 Text(track.title)
                     .font(.app(size: 13))
                 if track.likedStatus == 1 {
@@ -238,6 +276,7 @@ private struct SongsTableView: View {
             .opacity(track.likedStatus == -1 ? 0.5 : 1.0)
             .id(track.id)
         }
+        .width(min: 180, ideal: 320)
         .customizationID("title")
 
         TableColumn("Artist") { track in
@@ -371,7 +410,7 @@ private struct SongsTableView: View {
                 } label: { Label("Go to Album", systemImage: "square.stack") }
             }
             Divider()
-            Button(role: .destructive) { onRemove(ids) } label: { Label("Remove from Library", systemImage: "trash") }
+            Button(role: .destructive) { onRemove(ids) } label: { Label(removeLabel, systemImage: removeIcon) }
         }
     }
 }

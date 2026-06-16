@@ -19,11 +19,6 @@ struct SidebarView: View {
         List(selection: $selectedItem) {
             Section {
                 sidebarLabel(SidebarItem.listenNow)
-                sidebarLabel(SidebarItem.ai)
-            } header: {
-                Text("Home")
-                    .font(.app(size: 11, weight: .semibold))
-                    .foregroundStyle(.secondary)
             }
 
             Section {
@@ -47,10 +42,12 @@ struct SidebarView: View {
             Section {
                 ForEach(playlists) { playlist in
                     HStack(spacing: 8) {
-                        Image(systemName: playlist.isAIGenerated ? "sparkles" : "music.note.list")
-                            .font(.system(size: 18))
-                            .frame(width: 24, alignment: .center)
-                            .foregroundStyle(.secondary)
+                        ArtworkThumbnail(
+                            ownerType: "playlist",
+                            ownerId: playlist.id,
+                            size: 22,
+                            fallbackSystemImage: playlist.isAIGenerated ? "sparkles" : "music.note.list"
+                        )
                         Text(playlist.name)
                             .font(.app(size: 13))
                     }
