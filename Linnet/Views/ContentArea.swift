@@ -11,8 +11,6 @@ struct ContentArea: View {
                 switch item {
                 case .listenNow:
                     ListenNowView()
-                case .ai:
-                    AIChatView()
                 case .albums:
                     AlbumGridView()
                 case .artists:
