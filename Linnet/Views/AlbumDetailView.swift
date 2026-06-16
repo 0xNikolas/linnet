@@ -18,7 +18,7 @@ struct AlbumDetailView: View {
     @Environment(ArtworkService.self) private var artworkService
     @Environment(\.appDatabase) private var appDatabase
     @State private var isFetchingArtwork = false
-    @AppStorage("showQueueSidePane") private var showQueueSidePane = false
+
     @State private var showEditSheet = false
     @State private var artworkImage: NSImage?
     @State private var observer: DatabaseObserver<[TrackInfo]>?
@@ -197,7 +197,9 @@ struct AlbumDetailView: View {
         }
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
-                Button { showQueueSidePane.toggle() } label: {
+                Button {
+                    NotificationCenter.default.post(name: .toggleQueueSidePane, object: nil)
+                } label: {
                     Image(systemName: "sidebar.trailing")
                 }
             }

@@ -45,6 +45,13 @@ struct LinnetApp: App {
                 .keyboardShortcut("f")
             }
 
+            CommandGroup(after: .sidebar) {
+                Button("Toggle Queue") {
+                    NotificationCenter.default.post(name: .toggleQueueSidePane, object: nil)
+                }
+                .keyboardShortcut("q", modifiers: [.command, .option])
+            }
+
             CommandMenu("Playback") {
                 Button("Play/Pause") {
                     playerViewModel.togglePlayPause()

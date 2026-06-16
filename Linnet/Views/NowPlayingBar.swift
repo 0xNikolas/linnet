@@ -225,14 +225,6 @@ struct NowPlayingBar: View {
                     QueuePanel(isShowing: $showQueue)
                 }
 
-                // Queue side pane toggle
-                Button(action: {
-                    NotificationCenter.default.post(name: .toggleQueueSidePane, object: nil)
-                }) {
-                    Image(systemName: "sidebar.trailing")
-                        .font(.app(size: 14))
-                }
-                .buttonStyle(.plain)
             }
             .padding(.horizontal, 16)
             .frame(height: barHeight)

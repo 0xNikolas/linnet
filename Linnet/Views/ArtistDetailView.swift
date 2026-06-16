@@ -15,7 +15,7 @@ private struct ArtistDetailData: Sendable {
 
 struct ArtistDetailView: View {
     let artist: ArtistRecord
-    @Binding var navigationPath: NavigationPath
+    var onNavigateToAlbum: ((AlbumRecord) -> Void)?
     @Environment(PlayerViewModel.self) private var player
     @Environment(ArtworkService.self) private var artworkService
     @Environment(\.appDatabase) private var appDatabase
@@ -25,7 +25,6 @@ struct ArtistDetailView: View {
     @State private var observer: DatabaseObserver<ArtistDetailData>?
     @State private var artworkImage: NSImage?
     @State private var cachedData: ArtistDetailData?
-    @AppStorage("showQueueSidePane") private var showQueueSidePane = false
 
     private var data: ArtistDetailData? { observer?.value ?? cachedData }
 
@@ -48,9 +47,10 @@ struct ArtistDetailView: View {
     private var hasLoaded: Bool { data != nil }
 
     var body: some View {
-        ScrollView {
-            ScrollViewReader { proxy in
-                VStack(alignment: .leading, spacing: 20) {
+        VStack(spacing: 0) {
+            ScrollView {
+                ScrollViewReader { proxy in
+                    VStack(alignment: .leading, spacing: 20) {
                     // Hero
                     HStack(spacing: 16) {
                         Circle()
@@ -168,7 +168,7 @@ struct ArtistDetailView: View {
                                                 year: albumInfo.year,
                                                 artistId: albumInfo.artistId
                                             )
-                                            navigationPath.append(record)
+                                            onNavigateToAlbum?(record)
                                         },
                                         onRemove: { removeAlbum(albumInfo) }
                                     )
@@ -218,10 +218,13 @@ struct ArtistDetailView: View {
                     }
                 }
             }
+            }
         }
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
-                Button { showQueueSidePane.toggle() } label: {
+                Button {
+                    NotificationCenter.default.post(name: .toggleQueueSidePane, object: nil)
+                } label: {
                     Image(systemName: "sidebar.trailing")
                 }
             }

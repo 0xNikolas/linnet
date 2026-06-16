@@ -9,7 +9,6 @@ struct ListPage<S: SortOptionProtocol, Content: View>: View {
     var extraMenuBuilder: ((NSMenu, SortFilterMenuButton<S>.Coordinator) -> Void)?
     @ViewBuilder var content: () -> Content
 
-    @AppStorage("showQueueSidePane") private var showQueueSidePane = false
     @State private var isSearchPresented = false
 
     var body: some View {
@@ -32,7 +31,7 @@ struct ListPage<S: SortOptionProtocol, Content: View>: View {
                 }
                 ToolbarItem(placement: .primaryAction) {
                     Button {
-                        showQueueSidePane.toggle()
+                        NotificationCenter.default.post(name: .toggleQueueSidePane, object: nil)
                     } label: {
                         Image(systemName: "sidebar.trailing")
                     }

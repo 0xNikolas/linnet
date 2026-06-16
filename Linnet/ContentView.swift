@@ -40,7 +40,9 @@ struct ContentView: View {
                         }
                         .navigationDestination(for: ArtistRecord.self) { artist in
                             let _ = Log.navigation.debug("Pushing ArtistDetailView: \(artist.name)")
-                            ArtistDetailView(artist: artist, navigationPath: $navigationPath)
+                            ArtistDetailView(artist: artist, onNavigateToAlbum: { album in
+                                    navigationPath.append(album)
+                                })
                                 .navigationTitle(selectedSidebarItem?.label ?? "Artists")
                                 .onAppear {
                                     NotificationCenter.default.post(
@@ -57,12 +59,15 @@ struct ContentView: View {
                 }
                 .id(selectedSidebarItem.map { "\($0)" } ?? "none")
                 .environment(\.navigationPath, $navigationPath)
+                .frame(maxWidth: .infinity)
 
                 if showQueueSidePane {
                     Divider()
                     QueuePanel(isShowing: $showQueueSidePane)
+                        .transition(.move(edge: .trailing))
                 }
             }
+            .animation(.easeInOut(duration: 0.2), value: showQueueSidePane)
         }
         .safeAreaInset(edge: .bottom) {
             NowPlayingBar()
@@ -119,6 +124,9 @@ struct ContentView: View {
             }
             selectedSidebarItem = .artists
             pendingNavigation = .artist(ArtistRecord(id: artistId, name: artistName))
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .toggleQueueSidePane)) { _ in
+            showQueueSidePane.toggle()
         }
         .onReceive(NotificationCenter.default.publisher(for: .navigateToArtist)) { notification in
             guard let artistId = notification.userInfo?["artistId"] as? Int64,

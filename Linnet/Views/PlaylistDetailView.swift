@@ -21,7 +21,7 @@ struct PlaylistDetailView: View {
     @Environment(PlayerViewModel.self) private var player
     @Environment(\.appDatabase) private var appDatabase
     @State private var observer: DatabaseObserver<PlaylistDetailData>?
-    @AppStorage("showQueueSidePane") private var showQueueSidePane = false
+
     @State private var selectedTrackIDs: Set<Int64> = []
 
     private var playlist: PlaylistRecord? { observer?.value.playlist }
@@ -78,7 +78,9 @@ struct PlaylistDetailView: View {
         }
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
-                Button { showQueueSidePane.toggle() } label: {
+                Button {
+                    NotificationCenter.default.post(name: .toggleQueueSidePane, object: nil)
+                } label: {
                     Image(systemName: "sidebar.trailing")
                 }
             }
