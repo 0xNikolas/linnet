@@ -129,6 +129,12 @@ public final class DatabaseManager: Sendable {
             }
         }
 
+        migrator.registerMigration("v2-playlist-description") { db in
+            try db.alter(table: "playlist") { t in
+                t.add(column: "description", .text)
+            }
+        }
+
         try migrator.migrate(pool)
     }
 }

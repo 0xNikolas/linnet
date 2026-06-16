@@ -4,17 +4,20 @@ import GRDB
 public struct PlaylistRecord: Codable, Sendable, Hashable, Identifiable {
     public var id: Int64?
     public var name: String
+    public var description: String?
     public var isAIGenerated: Bool
     public var createdAt: Date
 
     public init(
         id: Int64? = nil,
         name: String,
+        description: String? = nil,
         isAIGenerated: Bool = false,
         createdAt: Date = Date()
     ) {
         self.id = id
         self.name = name
+        self.description = description
         self.isAIGenerated = isAIGenerated
         self.createdAt = createdAt
     }
