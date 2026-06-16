@@ -15,7 +15,13 @@ public final class DatabaseObserver<Value: Sendable> {
     /// Cleared whenever a fresh value is delivered. Observe this to surface a
     /// failure in the UI instead of silently showing stale data.
     public private(set) var lastError: Error?
-    private nonisolated(unsafe) var cancellable: AnyDatabaseCancellable?
+    /// Optional hook invoked on the main actor after each successful value update,
+    /// e.g. to mirror the value into a wrapper. Not part of observation tracking.
+    @ObservationIgnored public var onChange: (@MainActor (Value) -> Void)?
+    // `AnyDatabaseCancellable` cancels its observation when deallocated, so there is
+    // no manual `deinit` — releasing this property (on reobserve or when the observer
+    // is dropped) tears the observation down.
+    @ObservationIgnored private var cancellable: AnyDatabaseCancellable?
 
     public init(
         initial: Value,
@@ -58,14 +64,12 @@ public final class DatabaseObserver<Value: Sendable> {
                 // `.mainActor` guarantees delivery on the main actor, so assign
                 // directly — no Task hop, which preserves change ordering.
                 MainActor.assumeIsolated {
-                    self?.value = newValue
-                    self?.lastError = nil
+                    guard let self else { return }
+                    self.value = newValue
+                    self.lastError = nil
+                    self.onChange?(newValue)
                 }
             }
         )
-    }
-
-    deinit {
-        cancellable?.cancel()
     }
 }
