@@ -54,10 +54,13 @@ public final class CrossfadeManager: @unchecked Sendable {
             inNode.volume = fadeIn
 
             if currentStep >= steps {
+                // Snapshot then cancel outside the lock — cancelling while holding
+                // `lock` can deadlock against a concurrent cancelFade().
                 self?.lock.lock()
-                self?.fadeTimer?.cancel()
+                let timer = self?.fadeTimer
                 self?.fadeTimer = nil
                 self?.lock.unlock()
+                timer?.cancel()
 
                 outNode.stop()
                 outNode.volume = 1.0
@@ -72,8 +75,9 @@ public final class CrossfadeManager: @unchecked Sendable {
 
     public func cancelFade() {
         lock.lock()
-        fadeTimer?.cancel()
+        let timer = fadeTimer
         fadeTimer = nil
         lock.unlock()
+        timer?.cancel()
     }
 }

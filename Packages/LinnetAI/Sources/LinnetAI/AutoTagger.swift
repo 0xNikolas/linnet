@@ -39,7 +39,11 @@ public actor AutoTagger {
     public var processing: Bool { isProcessing }
 
     /// Tag a batch of audio files.
-    public func tagBatch(filePaths: [String], progress: (@Sendable (Int, Int) -> Void)? = nil) async -> [TaggingResult] {
+    public func tagBatch(
+        filePaths: [String],
+        progress: (@Sendable (Int, Int) -> Void)? = nil,
+        failure: (@Sendable (String, Error) -> Void)? = nil
+    ) async -> [TaggingResult] {
         guard !isProcessing else { return [] }
         isProcessing = true
         defer { isProcessing = false }
@@ -48,11 +52,12 @@ public actor AutoTagger {
         let total = filePaths.count
 
         for (index, path) in filePaths.enumerated() {
+            if Task.isCancelled { break }
             do {
                 let result = try await tag(filePath: path)
                 results.append(result)
             } catch {
-                continue
+                failure?(path, error)
             }
             progress?(index + 1, total)
         }

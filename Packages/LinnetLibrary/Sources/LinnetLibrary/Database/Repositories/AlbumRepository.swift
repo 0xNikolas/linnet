@@ -67,7 +67,7 @@ public struct AlbumRepository: Sendable {
 
     public func fetchAll(orderedBy column: String = "name") throws -> [AlbumRecord] {
         try pool.read { db in
-            try AlbumRecord.order(sql: column).fetchAll(db)
+            try AlbumRecord.order(Column(column)).fetchAll(db)
         }
     }
 

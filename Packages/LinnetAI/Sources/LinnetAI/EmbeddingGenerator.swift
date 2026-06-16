@@ -24,7 +24,11 @@ public actor EmbeddingGenerator {
 
     /// Generate embeddings for a batch of audio file paths.
     /// Returns results for files that were successfully processed.
-    public func generateBatch(filePaths: [String], progress: (@Sendable (Int, Int) -> Void)? = nil) async -> [EmbeddingResult] {
+    public func generateBatch(
+        filePaths: [String],
+        progress: (@Sendable (Int, Int) -> Void)? = nil,
+        failure: (@Sendable (String, Error) -> Void)? = nil
+    ) async -> [EmbeddingResult] {
         guard !isProcessing else { return [] }
         isProcessing = true
         defer { isProcessing = false }
@@ -33,12 +37,13 @@ public actor EmbeddingGenerator {
         let total = filePaths.count
 
         for (index, path) in filePaths.enumerated() {
+            if Task.isCancelled { break }
             do {
                 let result = try await generate(filePath: path)
                 results.append(result)
             } catch {
-                // Skip files that fail — don't halt the batch
-                continue
+                // Skip files that fail — don't halt the batch, but surface why.
+                failure?(path, error)
             }
 
             progress?(index + 1, total)

@@ -87,7 +87,7 @@ public struct PlaybackQueue: Sendable {
 
     /// Jump to a specific index in the queue.
     public mutating func jumpTo(index: Int) {
-        guard index < tracks.count else { return }
+        guard index >= 0, index < tracks.count else { return }
         history.append(currentIndex)
         currentIndex = index
     }

@@ -52,6 +52,29 @@ import Testing
     #expect(queue.upcoming != original)
 }
 
+@Test func jumpToValidIndex() {
+    var queue = PlaybackQueue()
+    queue.add(tracks: ["a.mp3", "b.mp3", "c.mp3"])
+    queue.jumpTo(index: 2)
+    #expect(queue.current == "c.mp3")
+}
+
+@Test func jumpToNegativeIndexIsIgnored() {
+    var queue = PlaybackQueue()
+    queue.add(tracks: ["a.mp3", "b.mp3", "c.mp3"])
+    queue.jumpTo(index: -1)
+    // Must not set currentIndex to a negative value (which would crash on access).
+    #expect(queue.currentIndex == 0)
+    #expect(queue.current == "a.mp3")
+}
+
+@Test func jumpToOutOfBoundsIsIgnored() {
+    var queue = PlaybackQueue()
+    queue.add(tracks: ["a.mp3", "b.mp3"])
+    queue.jumpTo(index: 99)
+    #expect(queue.current == "a.mp3")
+}
+
 @Test func repeatModes() {
     var queue = PlaybackQueue()
     queue.add(tracks: ["a.mp3", "b.mp3"])

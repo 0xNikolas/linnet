@@ -30,7 +30,8 @@ public actor LoudnessAnalyzer {
         let format = file.processingFormat
         let frameCount = AVAudioFrameCount(file.length)
 
-        guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: min(frameCount, 44100 * 30)) else {
+        let maxFrames = AVAudioFrameCount(format.sampleRate * 30)
+        guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: min(frameCount, maxFrames)) else {
             // Fallback: no normalization needed
             return LoudnessResult(peakLevel: 0, rmsLevel: Self.targetLoudness)
         }

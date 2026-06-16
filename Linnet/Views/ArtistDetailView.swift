@@ -3,8 +3,8 @@ import LinnetLibrary
 import GRDB
 import UniformTypeIdentifiers
 
-// File-level storage -- survives SwiftUI view lifecycle
-private nonisolated(unsafe) var _albumCardLastClickTime: Date = .distantPast
+// File-level storage -- survives SwiftUI view lifecycle so re-navigating to an
+// artist restores instantly while fresh data loads.
 private nonisolated(unsafe) var _artistDetailCache: [Int64: ArtistDetailData] = [:]
 private nonisolated(unsafe) var _artistArtworkCache: [Int64: NSImage] = [:]
 
@@ -387,15 +387,17 @@ private struct ArtistAlbumCard: View {
     @State private var isFetching = false
     @State private var showEditSheet = false
     @State private var artwork: NSImage?
+    /// Per-card so a click on one album can't be read as a double-click on another.
+    @State private var lastClickTime: Date = .distantPast
 
     var body: some View {
         Button {
             let now = Date()
-            if now.timeIntervalSince(_albumCardLastClickTime) < NSEvent.doubleClickInterval {
-                _albumCardLastClickTime = .distantPast
+            if now.timeIntervalSince(lastClickTime) < NSEvent.doubleClickInterval {
+                lastClickTime = .distantPast
                 onNavigate()
             } else {
-                _albumCardLastClickTime = now
+                lastClickTime = now
                 onSelect()
             }
         } label: {

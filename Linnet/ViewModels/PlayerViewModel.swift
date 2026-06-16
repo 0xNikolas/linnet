@@ -71,6 +71,9 @@ public final class PlayerViewModel {
     var queue = PlaybackQueue()
     private var queuedTracks: [TrackInfo] = []
     private var timeUpdateTimer: Timer?
+    /// The in-flight load, cancelled when a newer load supersedes it so rapid
+    /// track switches don't finish out of order.
+    private var loadTask: Task<Void, Never>?
     private var appDatabase: AppDatabase?
 
     /// Cached watched folders for security-scoped access resolution.
@@ -290,11 +293,16 @@ public final class PlayerViewModel {
     }
 
     func loadAndPlay(filePath: String) {
-        Task {
+        // Supersede any in-flight load so a slower earlier load can't clobber
+        // this track's state after it resolves.
+        loadTask?.cancel()
+        stopTimeUpdates()
+        loadTask = Task {
             do {
                 let url = URL(filePath: filePath)
                 restoreFolderAccess(for: filePath)
                 try await audioPlayer.load(url: url)
+                try Task.checkCancellation()
                 duration = audioPlayer.duration
                 currentTime = 0
                 audioPlayer.play()
@@ -306,6 +314,8 @@ public final class PlayerViewModel {
                 errorMessage = nil
                 updateNowPlayingInfo()
                 startTimeUpdates()
+            } catch is CancellationError {
+                // A newer load took over; leave its state untouched.
             } catch {
                 state = .stopped
                 duration = 0

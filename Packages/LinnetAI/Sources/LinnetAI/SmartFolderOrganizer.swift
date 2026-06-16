@@ -50,7 +50,11 @@ public actor SmartFolderOrganizer {
         // Step 2: Use LLM to name each cluster based on its tracks
         var suggestions: [FolderSuggestion] = []
         for cluster in clusters {
-            let trackTitles = cluster.map { $0.title ?? "Unknown" }.prefix(10).joined(separator: ", ")
+            // Strip newlines so a crafted track title can't inject prompt instructions.
+            let trackTitles = cluster
+                .map { ($0.title ?? "Unknown").replacingOccurrences(of: "\n", with: " ").replacingOccurrences(of: "\r", with: " ") }
+                .prefix(10)
+                .joined(separator: ", ")
             let namingPrompt = """
             Given these songs: \(trackTitles)
             Suggest a short folder name (2-4 words) that describes this group of music.
@@ -60,7 +64,7 @@ public actor SmartFolderOrganizer {
             let folderName: String
             do {
                 let response = try await aiService.generateText(prompt: namingPrompt, maxTokens: 20)
-                folderName = response.trimmingCharacters(in: .whitespacesAndNewlines)
+                folderName = Self.sanitizedFolderName(response, fallback: "Group \(suggestions.count + 1)")
             } catch {
                 folderName = "Group \(suggestions.count + 1)"
             }
@@ -81,15 +85,22 @@ public actor SmartFolderOrganizer {
         let fm = FileManager.default
         var moveCount = 0
 
+        let baseURL = URL(filePath: plan.baseDirectory).standardizedFileURL
+
         for suggestion in plan.suggestions {
-            let folderURL = URL(filePath: plan.baseDirectory)
-                .appendingPathComponent(suggestion.folderName)
+            // Re-sanitize and confine the destination folder to the base directory,
+            // defending against a crafted folder name (e.g. "../../elsewhere").
+            let safeName = Self.sanitizedFolderName(suggestion.folderName, fallback: "Untitled")
+            let folderURL = baseURL.appendingPathComponent(safeName).standardizedFileURL
+            guard folderURL.path.hasPrefix(baseURL.path) else { continue }
 
             try fm.createDirectory(at: folderURL, withIntermediateDirectories: true)
 
             for filePath in suggestion.trackFilePaths {
                 let sourceURL = URL(filePath: filePath)
-                let destURL = folderURL.appendingPathComponent(sourceURL.lastPathComponent)
+                let destURL = folderURL.appendingPathComponent(sourceURL.lastPathComponent).standardizedFileURL
+                // Confine the move target to the folder.
+                guard destURL.path.hasPrefix(folderURL.path) else { continue }
 
                 // Don't overwrite existing files
                 if !fm.fileExists(atPath: destURL.path()) {
@@ -100,6 +111,18 @@ public actor SmartFolderOrganizer {
         }
 
         return moveCount
+    }
+
+    /// Reduces an arbitrary (possibly LLM-produced) string to a safe single path
+    /// component: no path separators, no parent-directory escapes.
+    static func sanitizedFolderName(_ raw: String, fallback: String) -> String {
+        var name = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        for separator in ["/", "\\", ":"] {
+            name = name.replacingOccurrences(of: separator, with: "-")
+        }
+        name = name.replacingOccurrences(of: "..", with: "")
+        name = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        return name.isEmpty ? fallback : name
     }
 
     // MARK: - Simple K-Means Clustering

@@ -156,7 +156,7 @@ public final class Equalizer: @unchecked Sendable {
             eqBand.frequency = band.frequency
             eqBand.bandwidth = 1.0
             eqBand.gain = enabled ? band.gain : 0
-            eqBand.bypass = false
+            eqBand.bypass = !enabled
         }
     }
 }

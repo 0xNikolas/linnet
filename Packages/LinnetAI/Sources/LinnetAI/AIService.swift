@@ -23,6 +23,10 @@ public actor AIService {
     private let modelManager = ModelManager.shared
     private var loadedModels: Set<AIModelType> = []
     private var modelContainer: ModelContainer?
+    /// In-flight LLM load, so concurrent callers coalesce onto a single load
+    /// instead of each loading the container (actors don't prevent reentrancy
+    /// across `await` suspension points).
+    private var loadLLMTask: Task<Void, Error>?
 
     private init() {}
 
@@ -38,12 +42,25 @@ public actor AIService {
             throw AIError.modelNotReady(model)
         }
 
-        if !loadedModels.contains(model) {
-            if model == .textLLM {
-                try await loadLLM()
-            }
+        // Non-LLM models load nothing — just record them.
+        guard model == .textLLM else {
             loadedModels.insert(model)
+            return
         }
+
+        if loadedModels.contains(.textLLM) { return }
+
+        // Join an in-flight load if one exists, otherwise start it. Either way
+        // we don't return until the container is actually ready.
+        if let task = loadLLMTask {
+            try await task.value
+            return
+        }
+        let task = Task { try await self.loadLLM() }
+        loadLLMTask = task
+        defer { loadLLMTask = nil }
+        try await task.value
+        loadedModels.insert(.textLLM)
     }
 
     private func loadLLM() async throws {

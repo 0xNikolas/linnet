@@ -35,6 +35,14 @@ public final class NowPlayingManager: Sendable {
         onSeek: @escaping @Sendable (Double) -> Void
     ) {
         let center = MPRemoteCommandCenter.shared()
+        // Clear any previously-registered handlers so repeated calls don't stack
+        // duplicate targets that each fire on every command.
+        center.playCommand.removeTarget(nil)
+        center.pauseCommand.removeTarget(nil)
+        center.togglePlayPauseCommand.removeTarget(nil)
+        center.nextTrackCommand.removeTarget(nil)
+        center.previousTrackCommand.removeTarget(nil)
+        center.changePlaybackPositionCommand.removeTarget(nil)
         center.playCommand.addTarget { _ in onPlay(); return .success }
         center.pauseCommand.addTarget { _ in onPause(); return .success }
         center.togglePlayPauseCommand.addTarget { _ in onTogglePlayPause(); return .success }

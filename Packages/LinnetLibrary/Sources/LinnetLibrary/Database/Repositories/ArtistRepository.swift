@@ -58,7 +58,7 @@ public struct ArtistRepository: Sendable {
 
     public func fetchAll(orderedBy column: String = "name") throws -> [ArtistRecord] {
         try pool.read { db in
-            try ArtistRecord.order(sql: column).fetchAll(db)
+            try ArtistRecord.order(Column(column)).fetchAll(db)
         }
     }
 

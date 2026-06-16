@@ -41,8 +41,12 @@ public final class GaplessScheduler: @unchecked Sendable {
         }
     }
 
-    public func scheduleNext(file: AVAudioFile, at time: AVAudioTime?) {
-        nextNode.scheduleFile(file, at: time)
+    public func scheduleNext(file: AVAudioFile, at time: AVAudioTime?, completion: (@Sendable () -> Void)? = nil) {
+        if let completion {
+            nextNode.scheduleFile(file, at: time, completionCallbackType: .dataPlayedBack) { _ in completion() }
+        } else {
+            nextNode.scheduleFile(file, at: time)
+        }
     }
 
     public func allNodes() -> [AVAudioPlayerNode] { nodes }

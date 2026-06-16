@@ -18,12 +18,14 @@ public final class DatabaseObserver<Value: Sendable> {
         self.value = initial
         self.cancellable = observation.start(
             in: pool,
-            scheduling: .immediate,
+            scheduling: .mainActor,
             onError: { error in
                 print("DatabaseObserver error: \(error)")
             },
             onChange: { [weak self] newValue in
-                Task { @MainActor in
+                // `.mainActor` guarantees delivery on the main actor, so assign
+                // directly — no Task hop, which preserves change ordering.
+                MainActor.assumeIsolated {
                     self?.value = newValue
                 }
             }
@@ -38,12 +40,14 @@ public final class DatabaseObserver<Value: Sendable> {
         cancellable?.cancel()
         self.cancellable = observation.start(
             in: pool,
-            scheduling: .immediate,
+            scheduling: .mainActor,
             onError: { error in
                 print("DatabaseObserver error: \(error)")
             },
             onChange: { [weak self] newValue in
-                Task { @MainActor in
+                // `.mainActor` guarantees delivery on the main actor, so assign
+                // directly — no Task hop, which preserves change ordering.
+                MainActor.assumeIsolated {
                     self?.value = newValue
                 }
             }

@@ -11,8 +11,13 @@ public final class AudioPlayer: @unchecked Sendable {
     private var _volume: Float = 0.7
     private var sampleRate: Double = 44100
     private var scheduledStartFrame: AVAudioFramePosition = 0
-    /// Suppresses `onTrackFinished` during seek / load to prevent queue cascade.
-    private var suppressFinishCallback = false
+    /// Monotonic token identifying the currently scheduled playback. Each
+    /// load / seek / stop bumps it; a completion callback carrying a stale token
+    /// is ignored. This both prevents the queue from cascading on seek/load and
+    /// avoids a data race — the token is read on the audio I/O thread (inside the
+    /// completion handler) and written on the caller thread, all under a lock.
+    private let generationLock = NSLock()
+    private var _playbackGeneration: UInt64 = 0
 
     public var onTrackFinished: (@Sendable () -> Void)?
 
@@ -49,6 +54,21 @@ public final class AudioPlayer: @unchecked Sendable {
         equalizer.bind(to: eqNode)
     }
 
+    // MARK: - Playback generation
+
+    /// Invalidates any pending completion callback and returns the token that
+    /// newly scheduled audio must be tagged with.
+    private func nextGeneration() -> UInt64 {
+        generationLock.lock(); defer { generationLock.unlock() }
+        _playbackGeneration += 1
+        return _playbackGeneration
+    }
+
+    private func isCurrentGeneration(_ generation: UInt64) -> Bool {
+        generationLock.lock(); defer { generationLock.unlock() }
+        return _playbackGeneration == generation
+    }
+
     // MARK: - Public API
 
     public var currentTime: Double {
@@ -67,14 +87,13 @@ public final class AudioPlayer: @unchecked Sendable {
     }
 
     public func load(url: URL) async throws {
-        // Stop current playback; suppress the completion callback so it doesn't
-        // fire onTrackFinished and cascade through the queue.
-        suppressFinishCallback = true
+        // Invalidate the previous track's pending completion callback so stopping
+        // the node doesn't fire onTrackFinished and cascade through the queue.
+        let generation = nextGeneration()
         scheduler.activeNode.stop()
         if engine.isRunning {
             engine.stop()
         }
-        suppressFinishCallback = false
 
         let file: AVAudioFile
         do {
@@ -101,7 +120,7 @@ public final class AudioPlayer: @unchecked Sendable {
 
         // Schedule the file with completion callback
         activeNode.scheduleFile(file, at: nil, completionCallbackType: .dataPlayedBack) { [weak self] _ in
-            guard let self, !self.suppressFinishCallback else { return }
+            guard let self, self.isCurrentGeneration(generation) else { return }
             self.onTrackFinished?()
         }
 
@@ -119,7 +138,11 @@ public final class AudioPlayer: @unchecked Sendable {
 
     public func preloadNext(url: URL) throws {
         let file = try AVAudioFile(forReading: url)
-        scheduler.scheduleNext(file: file, at: nil)
+        // Forward completion so a track that finishes on the preloaded node (after
+        // a gapless transition swaps it active) still advances the queue.
+        scheduler.scheduleNext(file: file, at: nil) { [weak self] in
+            self?.onTrackFinished?()
+        }
     }
 
     public func play() {
@@ -134,15 +157,15 @@ public final class AudioPlayer: @unchecked Sendable {
     }
 
     public func stop() {
-        suppressFinishCallback = true
+        // Invalidate the in-flight callback that stopping the node fires.
+        let generation = nextGeneration()
         scheduler.activeNode.stop()
-        suppressFinishCallback = false
         scheduledStartFrame = 0
         // Re-schedule from start if we have a file
         if let file = currentFile {
             file.framePosition = 0
             scheduler.activeNode.scheduleFile(file, at: nil, completionCallbackType: .dataPlayedBack) { [weak self] _ in
-                guard let self, !self.suppressFinishCallback else { return }
+                guard let self, self.isCurrentGeneration(generation) else { return }
                 self.onTrackFinished?()
             }
         }
@@ -154,11 +177,10 @@ public final class AudioPlayer: @unchecked Sendable {
         let activeNode = scheduler.activeNode
         let wasPlaying = activeNode.isPlaying
 
-        // Suppress the completion callback — stopping the node fires it
-        // immediately, which would cascade through the queue.
-        suppressFinishCallback = true
+        // Invalidate the current segment's callback — stopping the node fires it
+        // immediately, which would otherwise cascade through the queue.
+        let generation = nextGeneration()
         activeNode.stop()
-        suppressFinishCallback = false
 
         let targetFrame = AVAudioFramePosition(time * sampleRate)
         let clampedFrame = max(0, min(targetFrame, file.length))
@@ -166,11 +188,15 @@ public final class AudioPlayer: @unchecked Sendable {
         file.framePosition = clampedFrame
         let remainingFrames = AVAudioFrameCount(file.length - clampedFrame)
 
-        guard remainingFrames > 0 else { return }
+        guard remainingFrames > 0 else {
+            // Seeked to/past the end — treat as natural completion so the queue advances.
+            onTrackFinished?()
+            return
+        }
 
         scheduledStartFrame = clampedFrame
         activeNode.scheduleSegment(file, startingFrame: clampedFrame, frameCount: remainingFrames, at: nil, completionCallbackType: .dataPlayedBack) { [weak self] _ in
-            guard let self, !self.suppressFinishCallback else { return }
+            guard let self, self.isCurrentGeneration(generation) else { return }
             self.onTrackFinished?()
         }
 

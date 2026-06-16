@@ -166,11 +166,11 @@ public struct PlaylistRepository: Sendable {
 
     /// Remove entries by track IDs from a playlist and reorder remaining.
     public func removeEntries(trackIds: Set<Int64>, fromPlaylist playlistId: Int64) throws {
+        guard !trackIds.isEmpty else { return }
         try pool.write { db in
-            try db.execute(
-                sql: "DELETE FROM playlistEntry WHERE playlistId = ? AND trackId IN (\(trackIds.map { "\($0)" }.joined(separator: ",")))",
-                arguments: [playlistId]
-            )
+            try PlaylistEntryRecord
+                .filter(Column("playlistId") == playlistId && trackIds.contains(Column("trackId")))
+                .deleteAll(db)
             // Reorder remaining
             let remaining = try PlaylistEntryRecord
                 .filter(Column("playlistId") == playlistId)

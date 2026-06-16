@@ -79,7 +79,9 @@ public struct TrackRepository: Sendable {
 
     public func fetchAll(orderedBy column: String = "title") throws -> [TrackRecord] {
         try pool.read { db in
-            try TrackRecord.order(sql: column).fetchAll(db)
+            // Treat `column` as a quoted column identifier, not raw SQL, so it
+            // can't be used as an injection vector.
+            try TrackRecord.order(Column(column)).fetchAll(db)
         }
     }
 
@@ -379,8 +381,15 @@ public struct TrackRepository: Sendable {
     /// Deletes all tracks whose filePath starts with the given prefix.
     @discardableResult
     public func deleteByFolder(pathPrefix: String) throws -> Int {
-        try pool.write { db in
-            try TrackRecord.filter(Column("filePath").like("\(pathPrefix)%")).deleteAll(db)
+        // Escape LIKE wildcards so `%`/`_` in a real path don't match unrelated rows.
+        let escaped = pathPrefix
+            .replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "%", with: "\\%")
+            .replacingOccurrences(of: "_", with: "\\_")
+        return try pool.write { db in
+            try TrackRecord
+                .filter(sql: "filePath LIKE ? ESCAPE '\\'", arguments: ["\(escaped)%"])
+                .deleteAll(db)
         }
     }
 

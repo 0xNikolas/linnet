@@ -57,12 +57,17 @@ public final class ArtworkService {
         guard let imageData else { return false }
         guard !Task.isCancelled else { return false }
 
-        try? db.artwork.upsert(
-            ownerType: "album",
-            ownerId: albumId,
-            imageData: imageData,
-            thumbnailData: nil
-        )
+        do {
+            try db.artwork.upsert(
+                ownerType: "album",
+                ownerId: albumId,
+                imageData: imageData,
+                thumbnailData: nil
+            )
+        } catch {
+            print("ArtworkService: failed to store album artwork for \(albumId): \(error)")
+            return false
+        }
         return true
     }
 
@@ -99,12 +104,17 @@ public final class ArtworkService {
         guard let imageData else { return false }
         guard !Task.isCancelled else { return false }
 
-        try? db.artwork.upsert(
-            ownerType: "artist",
-            ownerId: artistId,
-            imageData: imageData,
-            thumbnailData: nil
-        )
+        do {
+            try db.artwork.upsert(
+                ownerType: "artist",
+                ownerId: artistId,
+                imageData: imageData,
+                thumbnailData: nil
+            )
+        } catch {
+            print("ArtworkService: failed to store artist artwork for \(artistId): \(error)")
+            return false
+        }
         return true
     }
 
