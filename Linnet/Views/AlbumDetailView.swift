@@ -3,9 +3,6 @@ import LinnetLibrary
 import GRDB
 import UniformTypeIdentifiers
 
-// File-level caches -- survive SwiftUI view lifecycle
-private nonisolated(unsafe) var _albumDetailCache: [Int64: [TrackInfo]] = [:]
-
 private func formatTime(_ seconds: Double) -> String {
     let mins = Int(seconds) / 60
     let secs = Int(seconds) % 60
@@ -21,9 +18,14 @@ struct AlbumDetailView: View {
 
     @State private var showEditSheet = false
     @State private var artworkImage: NSImage?
-    @State private var observer: DatabaseObserver<[TrackInfo]>?
+    @State private var query: CachedQuery<[TrackInfo]>
 
-    private var tracks: [TrackInfo] { observer?.value ?? [] }
+    init(album: AlbumRecord) {
+        self.album = album
+        _query = State(initialValue: CachedQuery(cacheKey: "albumDetail-\(album.id ?? -1)", default: []))
+    }
+
+    private var tracks: [TrackInfo] { query.value }
 
     private var sortedTracks: [TrackInfo] {
         tracks.sorted {
@@ -170,28 +172,18 @@ struct AlbumDetailView: View {
         }
         .task {
             guard let db = appDatabase, let albumId = album.id else { return }
-            let initial = _albumDetailCache[albumId] ?? (
-                (try? db.pool.read { db in
-                    try TrackInfo.fetchAll(db, sql: """
-                        SELECT track.*, artist.name AS artistName, album.name AS albumName
-                        FROM track
-                        LEFT JOIN artist ON track.artistId = artist.id
-                        LEFT JOIN album ON track.albumId = album.id
-                        WHERE track.albumId = ?
+            query.activate(
+                in: db.pool,
+                seed: { db in
+                    try TrackInfo.fetchAll(db, sql: TrackInfo.baseSQL + """
+                         WHERE track.albumId = ?
                         ORDER BY track.discNumber, track.trackNumber
                         """, arguments: [albumId])
-                }) ?? []
-            )
-            observer = DatabaseObserver(
-                initial: initial,
-                in: db.pool,
+                },
                 observation: makeObservation(albumId: albumId)
             )
         }
-        .onChange(of: tracks) {
-            guard let albumId = album.id else { return }
-            _albumDetailCache[albumId] = tracks
-        }
+        .onChange(of: tracks) { query.persist() }
         .sheet(isPresented: $showEditSheet) {
             EditAlbumSheet(album: album)
         }

@@ -7,25 +7,22 @@ private struct PlaylistWithCount: Sendable {
     let songCount: Int
 }
 
-// File-level cache -- survives SwiftUI view lifecycle
-private nonisolated(unsafe) var _playlistsCache: [PlaylistWithCount]?
-
 struct PlaylistsView: View {
     @Environment(\.appDatabase) private var appDatabase
     @Environment(\.navigationPath) private var navigationPath
-    @State private var observer: DatabaseObserver<[PlaylistWithCount]>?
+    @State private var query = CachedQuery<[PlaylistWithCount]>(cacheKey: "playlists", default: [])
     @State private var selectedPlaylistID: Int64?
     @AppStorage("playlistSortOption") private var sortOption: PlaylistSortOption = .dateCreated
     @AppStorage("playlistSortDirection") private var sortDirection: SortDirection = .ascending
     @State private var searchText = ""
 
     private var playlists: [PlaylistRecord] {
-        (observer?.value ?? []).map(\.playlist)
+        query.value.map(\.playlist)
     }
 
     private var entryCounts: [Int64: Int] {
         var counts: [Int64: Int] = [:]
-        for item in observer?.value ?? [] {
+        for item in query.value {
             if let id = item.playlist.id {
                 counts[id] = item.songCount
             }
@@ -94,8 +91,9 @@ struct PlaylistsView: View {
         }
         .task {
             guard let db = appDatabase else { return }
-            let initial = _playlistsCache ?? (
-                (try? db.pool.read { db in
+            query.activate(
+                in: db.pool,
+                seed: { db in
                     let sql = """
                         SELECT
                             playlist.*,
@@ -116,18 +114,12 @@ struct PlaylistsView: View {
                         let count: Int = row["songCount"]
                         return PlaylistWithCount(playlist: record, songCount: count)
                     }
-                }) ?? []
-            )
-            observer = DatabaseObserver(
-                initial: initial,
-                in: db.pool,
+                },
                 observation: makeObservation()
             )
         }
         .onChange(of: playlists.count) {
-            if searchText.isEmpty {
-                _playlistsCache = observer?.value
-            }
+            if searchText.isEmpty { query.persist() }
         }
         .onChange(of: searchText) { _, _ in reobserve() }
         .onChange(of: sortOption) { _, _ in reobserve() }
@@ -189,7 +181,7 @@ struct PlaylistsView: View {
 
     private func reobserve() {
         guard let db = appDatabase else { return }
-        observer?.reobserve(in: db.pool, observation: makeObservation())
+        query.reobserve(in: db.pool, observation: makeObservation())
     }
 
     private func createPlaylist() {

@@ -13,9 +13,6 @@ private struct PlaylistDetailData: Sendable {
     let tracks: [TrackInfo]
 }
 
-// File-level cache -- survives SwiftUI view lifecycle (keyed by playlist ID)
-private nonisolated(unsafe) var _playlistDetailCache: [Int64: PlaylistDetailData] = [:]
-
 struct PlaylistDetailView: View {
     let playlistID: Int64
     @Environment(PlayerViewModel.self) private var player
@@ -41,7 +38,7 @@ struct PlaylistDetailView: View {
         .task(id: playlistID) {
             guard let db = appDatabase else { return }
             let pid = playlistID
-            let initial = _playlistDetailCache[pid] ?? (
+            let initial: PlaylistDetailData = ViewDataCache.value(forKey: "playlistDetail-\(pid)") ?? (
                 (try? db.pool.read { db in
                     let playlist = try PlaylistRecord.fetchOne(db, id: pid)
                     let sql = """
@@ -74,7 +71,9 @@ struct PlaylistDetailView: View {
             }
         }
         .onChange(of: tracks.count) {
-            _playlistDetailCache[playlistID] = observer?.value
+            if let value = observer?.value {
+                ViewDataCache.store(value, forKey: "playlistDetail-\(playlistID)")
+            }
         }
         .toolbar {
             ToolbarItem(placement: .primaryAction) {

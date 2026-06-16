@@ -3,19 +3,16 @@ import LinnetLibrary
 import GRDB
 import UniformTypeIdentifiers
 
-// File-level cache -- survives SwiftUI view lifecycle
-private nonisolated(unsafe) var _artistListCache: [ArtistInfo]?
-
 struct ArtistListView: View {
     @Environment(\.appDatabase) private var appDatabase
     @Environment(\.navigationPath) private var navigationPath
-    @State private var observer: DatabaseObserver<[ArtistInfo]>?
+    @State private var query = CachedQuery<[ArtistInfo]>(cacheKey: "artistList", default: [])
     @State private var selectedArtistID: Int64?
     @AppStorage("artistSortOption") private var sortOption: ArtistSortOption = .name
     @AppStorage("artistSortDirection") private var sortDirection: SortDirection = .ascending
     @State private var searchText = ""
 
-    private var artists: [ArtistInfo] { observer?.value ?? [] }
+    private var artists: [ArtistInfo] { query.value }
 
     var body: some View {
         ListPage(
@@ -50,8 +47,9 @@ struct ArtistListView: View {
         }
         .task {
             guard let db = appDatabase else { return }
-            let initial = _artistListCache ?? (
-                (try? db.pool.read { db in
+            query.activate(
+                in: db.pool,
+                seed: { db in
                     try ArtistInfo.fetchAll(db, sql: """
                         SELECT artist.id, artist.name,
                             COUNT(DISTINCT album.id) AS albumCount,
@@ -62,18 +60,12 @@ struct ArtistListView: View {
                         GROUP BY artist.id
                         ORDER BY artist.name COLLATE NOCASE ASC
                         """)
-                }) ?? []
-            )
-            observer = DatabaseObserver(
-                initial: initial,
-                in: db.pool,
+                },
                 observation: makeObservation()
             )
         }
         .onChange(of: artists) {
-            if searchText.isEmpty {
-                _artistListCache = artists
-            }
+            if searchText.isEmpty { query.persist() }
         }
         .onChange(of: searchText) { _, _ in reobserve() }
         .onChange(of: sortOption) { _, _ in reobserve() }
@@ -119,7 +111,7 @@ struct ArtistListView: View {
 
     private func reobserve() {
         guard let db = appDatabase else { return }
-        observer?.reobserve(in: db.pool, observation: makeObservation())
+        query.reobserve(in: db.pool, observation: makeObservation())
     }
 
     private func removeArtist(_ artist: ArtistInfo) {

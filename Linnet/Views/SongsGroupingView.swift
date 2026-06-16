@@ -34,22 +34,19 @@ private struct SongsData: Sendable {
     let sections: [TrackSection]
 }
 
-// File-level cache -- survives SwiftUI view lifecycle
-private nonisolated(unsafe) var _songsCache: SongsData?
-
 // MARK: - Wrapper View
 
 struct SongsGroupingView: View {
     @Binding var highlightedTrackID: Int64?
     @Environment(\.appDatabase) private var appDatabase
-    @State private var observer: DatabaseObserver<SongsData>?
+    @State private var songsQuery = CachedQuery<SongsData>(cacheKey: "songs", default: SongsData(tracks: [], sections: []))
     @AppStorage("songsGrouping") private var grouping: SongsGrouping = .byFolder
     @AppStorage("songsSortOption") private var sortOption: TrackSortOption = .title
     @AppStorage("songsSortDirection") private var sortDirection: SortDirection = .ascending
     @State private var searchText = ""
 
-    private var tracks: [TrackInfo] { observer?.value.tracks ?? [] }
-    private var sections: [TrackSection] { observer?.value.sections ?? [] }
+    private var tracks: [TrackInfo] { songsQuery.value.tracks }
+    private var sections: [TrackSection] { songsQuery.value.sections }
 
     var body: some View {
         ListPage(
@@ -85,32 +82,17 @@ struct SongsGroupingView: View {
         }
         .task {
             guard let db = appDatabase else { return }
-            let initial = _songsCache ?? (
-                (try? db.pool.read { db in
-                    let sql = """
-                        SELECT
-                            track.*,
-                            artist.name AS artistName,
-                            album.name AS albumName
-                        FROM track
-                        LEFT JOIN artist ON track.artistId = artist.id
-                        LEFT JOIN album ON track.albumId = album.id
-                        ORDER BY track.title COLLATE NOCASE ASC
-                        """
-                    let tracks = try TrackInfo.fetchAll(db, sql: sql)
-                    return SongsData(tracks: tracks, sections: [])
-                }) ?? SongsData(tracks: [], sections: [])
-            )
-            observer = DatabaseObserver(
-                initial: initial,
+            songsQuery.activate(
                 in: db.pool,
+                seed: { db in
+                    let tracks = try TrackInfo.fetchAll(db, sql: TrackInfo.baseSQL + " ORDER BY track.title COLLATE NOCASE ASC")
+                    return SongsData(tracks: tracks, sections: [])
+                },
                 observation: makeObservation()
             )
         }
         .onChange(of: tracks) {
-            if searchText.isEmpty {
-                _songsCache = observer?.value
-            }
+            if searchText.isEmpty { songsQuery.persist() }
         }
         .onChange(of: grouping) { _, _ in reobserve() }
         .onChange(of: sortOption) { _, _ in reobserve() }
@@ -130,34 +112,18 @@ struct SongsGroupingView: View {
         return ValueObservation.tracking { db in
             switch currentGrouping {
             case .allSongs:
-                let tracks: [TrackInfo]
-                if let q = query {
-                    tracks = try fetchSearchTracks(db: db, query: q)
-                } else {
-                    let sql = """
-                        SELECT
-                            track.*,
-                            artist.name AS artistName,
-                            album.name AS albumName
-                        FROM track
-                        LEFT JOIN artist ON track.artistId = artist.id
-                        LEFT JOIN album ON track.albumId = album.id
-                        ORDER BY \(column) \(dir)
-                        """
-                    tracks = try TrackInfo.fetchAll(db, sql: sql)
-                }
-                return SongsData(tracks: tracks, sections: [])
+                return SongsData(tracks: try fetchAllSongs(db: db, query: query, column: column, dir: dir), sections: [])
 
             case .byArtist:
-                let (tracks, sections) = try fetchGroupedByArtist(db: db, searchQuery: query)
+                let (tracks, sections) = try fetchGroupedByArtist(db: db, query: query)
                 return SongsData(tracks: tracks, sections: sections)
 
             case .byAlbum:
-                let (tracks, sections) = try fetchGroupedByAlbum(db: db, searchQuery: query)
+                let (tracks, sections) = try fetchGroupedByAlbum(db: db, query: query)
                 return SongsData(tracks: tracks, sections: sections)
 
             case .byFolder:
-                let (tracks, sections) = try fetchGroupedByFolder(db: db, searchQuery: query)
+                let (tracks, sections) = try fetchGroupedByFolder(db: db, query: query)
                 return SongsData(tracks: tracks, sections: sections)
             }
         }
@@ -165,122 +131,55 @@ struct SongsGroupingView: View {
 
     private func reobserve() {
         guard let db = appDatabase else { return }
-        observer?.reobserve(in: db.pool, observation: makeObservation())
+        songsQuery.reobserve(in: db.pool, observation: makeObservation())
     }
 
 }
 
 // MARK: - SQL helpers (free functions to avoid MainActor isolation in ValueObservation closures)
 
-private func fetchSearchTracks(db: Database, query: String) throws -> [TrackInfo] {
-    let likePattern = "%\(query)%"
-    if let ftsQuery = sanitizedFTSQuery(query) {
-        let sql = """
-            SELECT
-                track.*,
-                artist.name AS artistName,
-                album.name AS albumName
-            FROM track
-            LEFT JOIN artist ON track.artistId = artist.id
-            LEFT JOIN album ON track.albumId = album.id
-            WHERE track.id IN (SELECT rowid FROM trackFts WHERE trackFts MATCH ?)
-               OR track.title LIKE ?
-               OR artist.name LIKE ?
-               OR album.name LIKE ?
-            ORDER BY track.title COLLATE NOCASE
-            LIMIT 200
-            """
-        return try TrackInfo.fetchAll(db, sql: sql, arguments: [ftsQuery, likePattern, likePattern, likePattern])
-    } else {
-        let sql = """
-            SELECT DISTINCT
-                track.*,
-                artist.name AS artistName,
-                album.name AS albumName
-            FROM track
-            LEFT JOIN artist ON track.artistId = artist.id
-            LEFT JOIN album ON track.albumId = album.id
-            WHERE track.title LIKE ?
-               OR artist.name LIKE ?
-               OR album.name LIKE ?
-            ORDER BY track.title COLLATE NOCASE
-            LIMIT 200
-            """
-        return try TrackInfo.fetchAll(db, sql: sql, arguments: [likePattern, likePattern, likePattern])
+/// `TrackInfo.baseSQL` plus an optional search `WHERE` clause (via `TrackSearch`), a caller-supplied
+/// ORDER BY, and an optional LIMIT.
+private func fetchOrderedTracks(db: Database, query: String?, orderBy: String, limit: Int? = nil) throws -> [TrackInfo] {
+    var sql = TrackInfo.baseSQL
+    var arguments: [any DatabaseValueConvertible] = []
+    if let match = TrackSearch.condition(for: query) {
+        sql += " WHERE " + match.sql
+        arguments = match.arguments
     }
-}
-
-private func appendSearchWhereClause(sql: inout String, arguments: inout [any DatabaseValueConvertible], searchQuery: String?) {
-    guard let query = searchQuery, !query.isEmpty else { return }
-    let likePattern = "%\(query)%"
-    if let ftsQuery = sanitizedFTSQuery(query) {
-        sql += """
-
-            WHERE track.id IN (SELECT rowid FROM trackFts WHERE trackFts MATCH ?) OR track.title LIKE ? OR artist.name LIKE ? OR album.name LIKE ?
-            """
-        arguments = [ftsQuery, likePattern, likePattern, likePattern]
-    } else {
-        sql += """
-
-            WHERE track.title LIKE ? OR artist.name LIKE ? OR album.name LIKE ?
-            """
-        arguments = [likePattern, likePattern, likePattern]
+    sql += " ORDER BY " + orderBy
+    if let limit {
+        sql += " LIMIT ?"
+        arguments.append(limit)
     }
+    return try TrackInfo.fetchAll(db, sql: sql, arguments: StatementArguments(arguments))
 }
 
-private func fetchGroupedByArtist(db: Database, searchQuery: String?) throws -> ([TrackInfo], [TrackSection]) {
-    var sql = """
-        SELECT
-            track.*,
-            artist.name AS artistName,
-            album.name AS albumName
-        FROM track
-        LEFT JOIN artist ON track.artistId = artist.id
-        LEFT JOIN album ON track.albumId = album.id
-        """
-    var arguments: [any DatabaseValueConvertible] = []
-    appendSearchWhereClause(sql: &sql, arguments: &arguments, searchQuery: searchQuery)
-    sql += " ORDER BY COALESCE(artist.name, 'Unknown Artist') COLLATE NOCASE, track.title COLLATE NOCASE"
-
-    let tracks = try TrackInfo.fetchAll(db, sql: sql, arguments: StatementArguments(arguments))
-    let sections = groupTracksByKey(tracks) { $0.artistName ?? "Unknown Artist" }
-    return (tracks, sections)
+private func fetchAllSongs(db: Database, query: String?, column: SortSQL, dir: String) throws -> [TrackInfo] {
+    // Searches are capped and ordered by title; the unfiltered list honours the user's sort.
+    query == nil
+        ? try fetchOrderedTracks(db: db, query: nil, orderBy: "\(column) \(dir)")
+        : try fetchOrderedTracks(db: db, query: query, orderBy: "track.title COLLATE NOCASE", limit: 200)
 }
 
-private func fetchGroupedByAlbum(db: Database, searchQuery: String?) throws -> ([TrackInfo], [TrackSection]) {
-    var sql = """
-        SELECT
-            track.*,
-            artist.name AS artistName,
-            album.name AS albumName
-        FROM track
-        LEFT JOIN artist ON track.artistId = artist.id
-        LEFT JOIN album ON track.albumId = album.id
-        """
-    var arguments: [any DatabaseValueConvertible] = []
-    appendSearchWhereClause(sql: &sql, arguments: &arguments, searchQuery: searchQuery)
-    sql += " ORDER BY COALESCE(album.name, 'Unknown Album') COLLATE NOCASE, track.title COLLATE NOCASE"
-
-    let tracks = try TrackInfo.fetchAll(db, sql: sql, arguments: StatementArguments(arguments))
-    let sections = groupTracksByKey(tracks) { $0.albumName ?? "Unknown Album" }
-    return (tracks, sections)
+private func fetchGroupedByArtist(db: Database, query: String?) throws -> ([TrackInfo], [TrackSection]) {
+    let tracks = try fetchOrderedTracks(
+        db: db, query: query,
+        orderBy: "COALESCE(artist.name, 'Unknown Artist') COLLATE NOCASE, track.title COLLATE NOCASE"
+    )
+    return (tracks, groupTracksByKey(tracks) { $0.artistName ?? "Unknown Artist" })
 }
 
-private func fetchGroupedByFolder(db: Database, searchQuery: String?) throws -> ([TrackInfo], [TrackSection]) {
-    var sql = """
-        SELECT
-            track.*,
-            artist.name AS artistName,
-            album.name AS albumName
-        FROM track
-        LEFT JOIN artist ON track.artistId = artist.id
-        LEFT JOIN album ON track.albumId = album.id
-        """
-    var arguments: [any DatabaseValueConvertible] = []
-    appendSearchWhereClause(sql: &sql, arguments: &arguments, searchQuery: searchQuery)
-    sql += " ORDER BY track.filePath COLLATE NOCASE"
+private func fetchGroupedByAlbum(db: Database, query: String?) throws -> ([TrackInfo], [TrackSection]) {
+    let tracks = try fetchOrderedTracks(
+        db: db, query: query,
+        orderBy: "COALESCE(album.name, 'Unknown Album') COLLATE NOCASE, track.title COLLATE NOCASE"
+    )
+    return (tracks, groupTracksByKey(tracks) { $0.albumName ?? "Unknown Album" })
+}
 
-    let tracks = try TrackInfo.fetchAll(db, sql: sql, arguments: StatementArguments(arguments))
+private func fetchGroupedByFolder(db: Database, query: String?) throws -> ([TrackInfo], [TrackSection]) {
+    let tracks = try fetchOrderedTracks(db: db, query: query, orderBy: "track.filePath COLLATE NOCASE")
 
     var sectionsList: [TrackSection] = []
     var currentKey = ""

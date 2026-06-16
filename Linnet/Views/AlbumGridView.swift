@@ -3,21 +3,18 @@ import LinnetLibrary
 import GRDB
 import UniformTypeIdentifiers
 
-// File-level cache -- survives SwiftUI view lifecycle
-private nonisolated(unsafe) var _albumGridCache: [AlbumInfo]?
-
 struct AlbumGridView: View {
     @Environment(\.appDatabase) private var appDatabase
     @Environment(ArtworkService.self) private var artworkService
     @Environment(\.navigationPath) private var navigationPath
-    @State private var observer: DatabaseObserver<[AlbumInfo]>?
+    @State private var query = CachedQuery<[AlbumInfo]>(cacheKey: "albumGrid", default: [])
     @State private var selectedAlbumID: Int64?
     @AppStorage("albumSortOption") private var sortOption: AlbumSortOption = .name
     @AppStorage("albumSortDirection") private var sortDirection: SortDirection = .ascending
     @State private var searchText = ""
     private let columns = [GridItem(.adaptive(minimum: 160, maximum: 200), spacing: 20)]
 
-    private var albums: [AlbumInfo] { observer?.value ?? [] }
+    private var albums: [AlbumInfo] { query.value }
 
     var body: some View {
         ListPage(
@@ -58,8 +55,9 @@ struct AlbumGridView: View {
         }
         .task {
             guard let db = appDatabase else { return }
-            let initial = _albumGridCache ?? (
-                (try? db.pool.read { db in
+            query.activate(
+                in: db.pool,
+                seed: { db in
                     try AlbumInfo.fetchAll(db, sql: """
                         SELECT
                             album.id, album.name, album.artistName, album.year, album.artistId,
@@ -69,18 +67,12 @@ struct AlbumGridView: View {
                         GROUP BY album.id
                         ORDER BY album.name COLLATE NOCASE ASC
                         """)
-                }) ?? []
-            )
-            observer = DatabaseObserver(
-                initial: initial,
-                in: db.pool,
+                },
                 observation: makeObservation()
             )
         }
         .onChange(of: albums) {
-            if searchText.isEmpty {
-                _albumGridCache = albums
-            }
+            if searchText.isEmpty { query.persist() }
         }
         .onChange(of: searchText) { _, _ in reobserve() }
         .onChange(of: sortOption) { _, _ in reobserve() }
@@ -122,7 +114,7 @@ struct AlbumGridView: View {
 
     private func reobserve() {
         guard let db = appDatabase else { return }
-        observer?.reobserve(in: db.pool, observation: makeObservation())
+        query.reobserve(in: db.pool, observation: makeObservation())
     }
 
     private func removeAlbum(_ album: AlbumInfo) {

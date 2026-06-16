@@ -6,7 +6,9 @@ import LinnetLibrary
 
 protocol SortOptionProtocol: RawRepresentable<String>, CaseIterable, Identifiable, Hashable {
     var displayName: String { get }
-    var sqlColumn: String { get }
+    /// A `SortSQL`, not a bare `String`, so an ORDER BY column can only ever be one of
+    /// the library's fixed column constants — injection-proof by construction.
+    var sqlColumn: SortSQL { get }
 }
 
 extension SortOptionProtocol {
@@ -66,7 +68,7 @@ enum TrackSortOption: String, SortOptionProtocol {
         }
     }
 
-    var sqlColumn: String { sortColumn.sql }
+    var sqlColumn: SortSQL { sortColumn.sql }
 }
 
 // MARK: - Artist Sort Options
@@ -88,7 +90,7 @@ enum ArtistSortOption: String, SortOptionProtocol {
         }
     }
 
-    var sqlColumn: String { sortColumn.sql }
+    var sqlColumn: SortSQL { sortColumn.sql }
 }
 
 // MARK: - Album Sort Options
@@ -112,7 +114,7 @@ enum AlbumSortOption: String, SortOptionProtocol {
         }
     }
 
-    var sqlColumn: String { sortColumn.sql }
+    var sqlColumn: SortSQL { sortColumn.sql }
 }
 
 // MARK: - Playlist Sort Options
@@ -136,7 +138,7 @@ enum PlaylistSortOption: String, SortOptionProtocol {
         }
     }
 
-    var sqlColumn: String { sortColumn.sql }
+    var sqlColumn: SortSQL { sortColumn.sql }
 }
 
 // MARK: - Sort Filter Menu Button (NSMenu-based, no toolbar pill)

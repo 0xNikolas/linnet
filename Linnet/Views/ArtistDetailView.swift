@@ -3,11 +3,6 @@ import LinnetLibrary
 import GRDB
 import UniformTypeIdentifiers
 
-// File-level storage -- survives SwiftUI view lifecycle so re-navigating to an
-// artist restores instantly while fresh data loads.
-private nonisolated(unsafe) var _artistDetailCache: [Int64: ArtistDetailData] = [:]
-private nonisolated(unsafe) var _artistArtworkCache: [Int64: NSImage] = [:]
-
 private struct ArtistDetailData: Sendable {
     let allTracks: [TrackInfo]
     let albums: [AlbumInfo]
@@ -231,10 +226,10 @@ struct ArtistDetailView: View {
         }
         .onAppear {
             guard let artistId = artist.id else { return }
-            if let cached = _artistDetailCache[artistId] {
+            if let cached: ArtistDetailData = ViewDataCache.value(forKey: "artistDetail-\(artistId)") {
                 cachedData = cached
             }
-            if let cachedImg = _artistArtworkCache[artistId] {
+            if let cachedImg: NSImage = ViewDataCache.value(forKey: "artistArtwork-\(artistId)") {
                 artworkImage = cachedImg
             }
         }
@@ -272,11 +267,11 @@ struct ArtistDetailView: View {
         }
         .onChange(of: observer?.value.allTracks.count) {
             guard let artistId = artist.id, let data = observer?.value else { return }
-            _artistDetailCache[artistId] = data
+            ViewDataCache.store(data, forKey: "artistDetail-\(artistId)")
         }
         .onChange(of: observer?.value.albums.count) {
             guard let artistId = artist.id, let data = observer?.value else { return }
-            _artistDetailCache[artistId] = data
+            ViewDataCache.store(data, forKey: "artistDetail-\(artistId)")
         }
     }
 
@@ -319,7 +314,7 @@ struct ArtistDetailView: View {
             return
         }
         artworkImage = img
-        _artistArtworkCache[artistId] = img
+        ViewDataCache.store(img, forKey: "artistArtwork-\(artistId)")
     }
 
     private func removeTrack(_ track: TrackInfo) {
@@ -359,7 +354,7 @@ struct ArtistDetailView: View {
             do { try db.artwork.upsert(ownerType: "artist", ownerId: artistId, imageData: data, thumbnailData: nil) } catch { Log.database.error("Failed to upsert artist artwork \(artistId): \(error)") }
             let img = NSImage(data: data)
             artworkImage = img
-            if let img { _artistArtworkCache[artistId] = img }
+            if let img { ViewDataCache.store(img, forKey: "artistArtwork-\(artistId)") }
         }
     }
 }

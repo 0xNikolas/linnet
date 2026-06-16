@@ -7,22 +7,19 @@ private struct ListenNowData: Sendable {
     let recentTracks: [TrackInfo]
 }
 
-// File-level cache -- survives SwiftUI view lifecycle
-private nonisolated(unsafe) var _listenNowCache: ListenNowData?
-
 struct ListenNowView: View {
     @Environment(\.appDatabase) private var appDatabase
     @Environment(PlayerViewModel.self) private var player
     @Environment(ArtworkService.self) private var artworkService
     @Environment(\.navigationPath) private var navigationPath
-    @State private var observer: DatabaseObserver<ListenNowData>?
+    @State private var query = CachedQuery<ListenNowData>(cacheKey: "listenNow", default: ListenNowData(albums: [], recentTracks: []))
     @State private var searchText = ""
     @State private var isSearchPresented = false
     @State private var selectedTrackID: Int64?
     @State private var selectedAlbumID: Int64?
 
-    private var albums: [AlbumInfo] { observer?.value.albums ?? [] }
-    private var recentTracks: [TrackInfo] { observer?.value.recentTracks ?? [] }
+    private var albums: [AlbumInfo] { query.value.albums }
+    private var recentTracks: [TrackInfo] { query.value.recentTracks }
 
     var body: some View {
         ScrollView {
@@ -113,8 +110,9 @@ struct ListenNowView: View {
         }
         .task {
             guard let db = appDatabase else { return }
-            let initial = _listenNowCache ?? (
-                (try? db.pool.read { db in
+            query.activate(
+                in: db.pool,
+                seed: { db in
                     let albumSql = """
                         SELECT
                             album.id, album.name, album.artistName, album.year, album.artistId,
@@ -125,31 +123,14 @@ struct ListenNowView: View {
                         ORDER BY album.name COLLATE NOCASE ASC
                         """
                     let albums = try AlbumInfo.fetchAll(db, sql: albumSql)
-                    let trackSql = """
-                        SELECT
-                            track.*,
-                            artist.name AS artistName,
-                            album.name AS albumName
-                        FROM track
-                        LEFT JOIN artist ON track.artistId = artist.id
-                        LEFT JOIN album ON track.albumId = album.id
-                        ORDER BY track.dateAdded DESC
-                        LIMIT ?
-                        """
-                    let recentTracks = try TrackInfo.fetchAll(db, sql: trackSql, arguments: [20])
+                    let recentTracks = try TrackInfo.fetchAll(db, sql: TrackInfo.baseSQL + " ORDER BY track.dateAdded DESC LIMIT ?", arguments: [20])
                     return ListenNowData(albums: albums, recentTracks: recentTracks)
-                }) ?? ListenNowData(albums: [], recentTracks: [])
-            )
-            observer = DatabaseObserver(
-                initial: initial,
-                in: db.pool,
+                },
                 observation: makeObservation()
             )
         }
         .onChange(of: albums.count) {
-            if searchText.isEmpty {
-                _listenNowCache = observer?.value
-            }
+            if searchText.isEmpty { query.persist() }
         }
         .onChange(of: searchText) { _, _ in reobserve() }
     }
@@ -217,7 +198,7 @@ struct ListenNowView: View {
 
     private func reobserve() {
         guard let db = appDatabase else { return }
-        observer?.reobserve(in: db.pool, observation: makeObservation())
+        query.reobserve(in: db.pool, observation: makeObservation())
     }
 
     private func removeTrack(_ track: TrackInfo) {
